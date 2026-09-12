@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE2 Drift — OpenTofu Drift Detection</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; padding:20px; }
+  .container { max-width:1200px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .header h1 { font-size:1.5em; color:#333; display:flex; align-items:center; gap:10px; }
+  .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:16px; margin-bottom:24px; }
+  .card .label { color:#666; font-size:0.8em; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; }
+  .card .value { font-size:1.8em; font-weight:700; color:#333; margin-top:2px; }
+  .card .value.warn { color:#d97706; }
+  .card .value.bad { color:#dc2626; }
+  .card .value.ok { color:#059669; }
+  .card .sub { color:#999; font-size:0.85em; margin-top:4px; }
+  .toolbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar button { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  .toolbar button:hover { opacity:0.85; }
+  .toolbar button:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-sync { background:#059669; color:white; }
+  .btn-start { background:#059669; color:white; }
+  .btn-stop { background:#dc2626; color:white; }
+  .btn-config { background:#6b7280; color:white; }
+  .btn-key { background:#667eea; color:white; }
+  .filters { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .filters select, .filters input { padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  table.data { width:100%; border-collapse:collapse; font-size:0.88em; }
+  table.data th { text-align:left; padding:10px 12px; color:#666; border-bottom:2px solid #eee; font-size:0.85em; text-transform:uppercase; letter-spacing:0.03em; }
+  table.data td { padding:10px 12px; border-bottom:1px solid #f1f1f1; vertical-align:top; }
+  table.data code { background:#f4f4f5; padding:1px 6px; border-radius:4px; font-size:0.92em; }
+  .badge { padding:2px 8px; border-radius:10px; font-size:0.78em; font-weight:600; display:inline-block; }
+  .badge.open { background:#fee2e2; color:#dc2626; }
+  .badge.resolved { background:#d1fae5; color:#059669; }
+  .badge.attribute_drift { background:#fef3c7; color:#d97706; }
+  .badge.resource_missing { background:#fee2e2; color:#dc2626; }
+  .badge.vm { background:#e0e7ff; color:#3730a3; }
+  .badge.lxc { background:#fef3c7; color:#d97706; }
+  .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; }
+  .overlay.visible { display:flex; }
+  .modal { background:white; border-radius:12px; padding:32px; max-width:520px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.2); max-height:90vh; overflow:auto; }
+  .modal h2 { font-size:1.2em; margin-bottom:20px; color:#333; }
+  .modal .form-group { margin-bottom:16px; }
+  .modal .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.9em; }
+  .modal .form-group input[type=text],.modal .form-group input[type=number] { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .modal .form-group input:focus { outline:none; border-color:#667eea; }
+  .modal .btn-row { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .modal .btn-row button { padding:9px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  .modal .btn-row .btn-cancel { background:#e5e7eb; color:#333; }
+  .modal .btn-primary { background:#667eea; color:white; }
+  .key-reveal { background:#0f172a; color:#a5f3fc; padding:14px; border-radius:8px; font-family:monospace; word-break:break-all; font-size:0.9em; margin:12px 0; }
+  .checkline { display:flex; align-items:center; gap:8px; font-size:0.9em; color:#444; margin-bottom:8px; }
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:8px; color:white; font-weight:500; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; opacity:0; transform:translateY(10px); transition:all 0.3s ease; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#059669; }
+  .toast.error { background:#dc2626; }
+  .toast.info { background:#3730a3; }
+  .empty-state { text-align:center; color:#999; padding:40px; }
+  .loading { text-align:center; color:#999; padding:40px; }
+  .mono { font-family:ui-monospace,monospace; font-size:0.85em; }
+  details.info-note { background:#f0f4ff; border:1px solid #c7d2fe; border-radius:8px; padding:10px 16px; margin:0 0 20px 0; font-size:0.88em; }
+  details.info-note summary { cursor:pointer; font-weight:600; color:#4338ca; user-select:none; }
+  details.info-note div { margin-top:10px; color:#444; line-height:1.6; }
+  @media(max-width:600px) { .summary-grid { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <a href="/admin/hub" style="text-decoration:none;color:#667eea;font-weight:600;font-size:0.9em;white-space:nowrap;">&#8592; Hub</a>
+    <h1>PVE2 Drift <span style="font-size:0.6em;color:#999;font-weight:400;">OpenTofu Drift Detection</span></h1>
+    <div class="header-right">
+      <button class="btn-key" onclick="openKeys()">&#128273; API Keys</button>
+      <button class="btn-config" onclick="openConfig()">&#9881; Config</button>
+    </div>
+  </div>
+
+  <details class="info-note">
+    <summary>&#8505;&#65039; How drift detection works &amp; why</summary>
+    <div>
+      <p><strong>How it works:</strong> your CI pipeline posts the output of <code>tofu show -json</code> to the ingestion endpoint after every apply (push model — no backend credentials needed here). Each resource is matched to the live cluster by a unique <em>tag</em> (<code>pve2-managed-&lt;hash&gt;</code>) that the module injects — never by vmid, which can change. A scheduled check then compares the last ingested declared state with the live state the Core Agent already collects.</p>
+      <p><strong>Why:</strong> catch resources deleted or modified outside IaC, and attribute drift (cores, RAM, disk, node, vmid), without duplicating a Terraform provider's logic. The system proposes, the administrator decides: the plugin never applies anything.</p>
+      <p><strong>Note:</strong> VMs live with a managed tag but no OpenTofu resource are reported to the Audit as <em>unmanaged</em>, not as drift. Notifications fire only on state transitions (opened/resolved), never on every check.</p>
+    </div>
+  </details>
+
+  <div class="summary-grid" id="summary"></div>
+
+  <div class="toolbar">
+    <button class="btn-sync" onclick="runCheck()" id="check-btn">&#8635; Run Drift Check Now</button>
+    <button class="btn-start" onclick="startScheduler()" id="sched-start-btn">&#9654; Start BG</button>
+    <button class="btn-stop" onclick="stopScheduler()" id="sched-stop-btn" style="display:none;">&#9632; Stop BG</button>
+    <span style="color:#999;font-size:0.85em;margin-left:8px;" id="sched-status"></span>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <h2 style="font-size:1.05em;margin-bottom:12px;color:#333;">Tag &amp; snippet generator</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <input type="text" id="snippet-address" placeholder="module.foo.proxmox_virtual_environment_vm.bar[&quot;baz&quot;]" style="flex:1;min-width:260px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:ui-monospace,monospace;">
+      <button class="btn-key" onclick="genSnippet()">Generate tag + HCL</button>
+    </div>
+    <div id="snippet-out" class="mono" style="display:none;background:#f9fafb;border:1px solid #eee;border-radius:8px;padding:12px;white-space:pre-wrap;word-break:break-all;"></div>
+  </div>
+
+  <div class="filters">
+    <select id="filter-status" onchange="loadDrifts()">
+      <option value="open">Open drifts</option>
+      <option value="resolved">Resolved drifts</option>
+      <option value="">All events</option>
+    </select>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <div id="drift-container"><div class="loading">Loading drifts...</div></div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:1.05em;margin-bottom:12px;color:#333;">Managed resources</h2>
+    <div id="resource-container"><div class="loading">Loading resources...</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="config-overlay">
+  <div class="modal">
+    <h2>&#9881; Drift Configuration</h2>
+    <div class="form-group">
+      <label><input type="checkbox" id="cfg-enabled" style="margin-right:6px;"> Enabled</label>
+    </div>
+    <div class="form-group">
+      <label for="cfg-interval">Check interval (seconds)</label>
+      <input type="number" id="cfg-interval" min="60" step="60">
+    </div>
+    <div class="form-group">
+      <label>Tracked fields</label>
+      <div id="cfg-fields"></div>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="cfg-unmanaged" style="margin-right:6px;"> Report unmanaged machines to the Audit</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="closeOverlay('config-overlay')">Cancel</button>
+      <button class="btn-primary" onclick="saveConfig()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="keys-overlay">
+  <div class="modal">
+    <h2>&#128273; Drift Ingestion API Keys</h2>
+    <p style="font-size:0.88em;color:#666;margin-bottom:12px;">CI pushes <code>tofu show -json</code> to <code>POST /api/v1/state/ingest</code> with <code>Authorization: Bearer &lt;key&gt;</code>. The key is shown only once at creation.</p>
+    <div class="form-group" style="display:flex;gap:8px;">
+      <input type="text" id="key-env" placeholder="environment (e.g. production)" style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;">
+      <button class="btn-primary" onclick="createKey()">Create</button>
+    </div>
+    <div id="key-reveal" style="display:none;">
+      <div class="key-reveal" id="key-value"></div>
+      <p style="font-size:0.85em;color:#d97706;margin-bottom:12px;">Copy it now — it will never be shown again.</p>
+    </div>
+    <div id="keys-list"><div class="loading">Loading...</div></div>
+    <div class="btn-row"><button class="btn-cancel" onclick="closeOverlay('keys-overlay')">Close</button></div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api/plugins/pve2drift';
+const ALL_FIELDS = ['cores','memory_mb','disk_gb','node','vmid'];
+
+async function api(path, opts) {
+  const r = await fetch(BASE + path, opts || {});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || e.error || r.statusText); }
+  return r.json();
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (type||'info') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function escapeHtml(s) { return (s===null||s===undefined?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function closeOverlay(id) { document.getElementById(id).classList.remove('visible'); }
+
+async function loadSummary() {
+  try {
+    const [cfg, drifts, resources] = await Promise.all([
+      api('/config'), api('/drifts?status=open&limit=1000'), api('/resources')]);
+    const c = cfg.config || {};
+    const open = drifts.events || [];
+    const missing = open.filter(d => d.category === 'resource_missing').length;
+    const attrs = open.filter(d => d.category === 'attribute_drift').length;
+    document.getElementById('summary').innerHTML = `
+      <div class="card"><div class="label">Managed resources</div><div class="value">${(resources.resources||[]).length}</div><div class="sub">declared via IaC</div></div>
+      <div class="card"><div class="label">Open drifts</div><div class="value ${open.length?'warn':''}">${open.length}</div><div class="sub">${attrs} attribute, ${missing} missing</div></div>
+      <div class="card"><div class="label">Last check</div><div class="value" style="font-size:1em;">${escapeHtml((resources.resources||[]).map(r=>r.last_checked_at).filter(Boolean).sort().pop() || '—')}</div><div class="sub">per-resource timestamps</div></div>
+      <div class="card"><div class="label">Status</div><div class="value ${c.enabled?'ok':'warn'}" style="font-size:1em;">${c.enabled?'Enabled':'Disabled'}</div><div class="sub">interval: ${c.check_interval_seconds||3600}s</div></div>`;
+    await refreshSchedulerStatus();
+  } catch (e) { toast('Load failed: ' + e.message, 'error'); }
+}
+
+async function refreshSchedulerStatus() {
+  try {
+    const s = await api('/scheduler/status');
+    document.getElementById('sched-start-btn').style.display = s.running ? 'none' : '';
+    document.getElementById('sched-stop-btn').style.display = s.running ? '' : 'none';
+    document.getElementById('sched-status').textContent = s.running ? ('background check every ' + (s.job && s.job.interval_seconds ? s.job.interval_seconds : '?') + 's') : 'background check stopped';
+  } catch (e) {}
+}
+
+async function loadDrifts() {
+  const status = document.getElementById('filter-status').value;
+  const box = document.getElementById('drift-container');
+  try {
+    const data = await api('/drifts' + (status ? '?status=' + status : ''));
+    const ev = data.events || [];
+    if (!ev.length) { box.innerHTML = '<div class="empty-state">No drift events' + (status ? ' (' + status + ')' : '') + '.</div>'; return; }
+    box.innerHTML = '<table class="data"><thead><tr><th>Status</th><th>Resource</th><th>Field</th><th>Declared</th><th>Live</th><th>Category</th><th>First detected</th></tr></thead><tbody>' +
+      ev.map(e => `<tr>
+        <td><span class="badge ${escapeHtml(e.status)}">${escapeHtml(e.status)}</span></td>
+        <td class="mono">${escapeHtml(e.resource_address)}</td>
+        <td><code>${escapeHtml(e.field)}</code></td>
+        <td class="mono">${escapeHtml(e.declared_value || '—')}</td>
+        <td class="mono">${escapeHtml(e.live_value || '—')}</td>
+        <td><span class="badge ${escapeHtml(e.category)}">${escapeHtml(e.category)}</span></td>
+        <td>${escapeHtml(e.first_detected_at || '')}</td>
+      </tr>`).join('') + '</tbody></table>';
+  } catch (e) { box.innerHTML = '<div class="empty-state">' + escapeHtml(e.message) + '</div>'; }
+}
+
+async function loadResources() {
+  const box = document.getElementById('resource-container');
+  try {
+    const data = await api('/resources');
+    const rs = data.resources || [];
+    if (!rs.length) { box.innerHTML = '<div class="empty-state">No ingested resources yet — create an API key and configure the CI push.</div>'; return; }
+    box.innerHTML = '<table class="data"><thead><tr><th>Type</th><th>Resource address</th><th>Node</th><th>VMID</th><th>Tag</th><th>Open drifts</th></tr></thead><tbody>' +
+      rs.map(r => `<tr>
+        <td><span class="badge ${r.declared && r.declared.resource_type === 'proxmox_virtual_environment_container' ? 'lxc' : 'vm'}">${r.declared && r.declared.resource_type === 'proxmox_virtual_environment_container' ? 'lxc' : 'vm'}</span></td>
+        <td class="mono">${escapeHtml(r.resource_address)}</td>
+        <td>${escapeHtml(r.node || '—')}</td>
+        <td>${escapeHtml(r.last_vmid !== null && r.last_vmid !== undefined ? r.last_vmid : '—')}</td>
+        <td class="mono">${escapeHtml(r.matching_tag)}</td>
+        <td>${r.open_drifts.length ? '<span class="badge open">' + r.open_drifts.length + '</span>' : '<span class="badge resolved">0</span>'}</td>
+      </tr>`).join('') + '</tbody></table>';
+  } catch (e) { box.innerHTML = '<div class="empty-state">' + escapeHtml(e.message) + '</div>'; }
+}
+
+async function runCheck() {
+  const btn = document.getElementById('check-btn');
+  btn.disabled = true;
+  try {
+    const r = await api('/sync', { method: 'POST' });
+    if (r.error) { toast(r.error, 'error'); return; }
+    toast(`Check done: ${r.checked} resources, ${r.opened} opened, ${r.resolved} resolved`, r.opened ? 'error' : 'success');
+    await Promise.all([loadSummary(), loadDrifts(), loadResources()]);
+  } catch (e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; }
+}
+
+async function startScheduler() {
+  try { await api('/scheduler/start', { method: 'POST' }); toast('Background check started', 'success'); await refreshSchedulerStatus(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function stopScheduler() {
+  try { await api('/scheduler/stop', { method: 'POST' }); toast('Background check stopped', 'info'); await refreshSchedulerStatus(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function genSnippet() {
+  const address = document.getElementById('snippet-address').value.trim();
+  const out = document.getElementById('snippet-out');
+  if (!address) { toast('Enter a resource address first', 'error'); return; }
+  try {
+    const r = await api('/tf-snippet?address=' + encodeURIComponent(address));
+    out.style.display = '';
+    out.textContent = '# matching tag for ' + r.address + '\n' + r.hcl + '\n\n# then push the state after apply:\n#   tofu show -json | curl -sS -X POST "$PVE2_URL/api/v1/state/ingest" \\\n#     -H "Authorization: Bearer $PVE2_DRIFT_KEY" -H "Content-Type: application/json" --data-binary @-';
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function openConfig() {
+  api('/config').then(data => {
+    const c = data.config || {};
+    document.getElementById('cfg-enabled').checked = !!c.enabled;
+    document.getElementById('cfg-interval').value = c.check_interval_seconds || 3600;
+    document.getElementById('cfg-unmanaged').checked = c.unmanaged_to_audit !== false;
+    const tracked = c.tracked_fields && c.tracked_fields.length ? c.tracked_fields : ALL_FIELDS;
+    document.getElementById('cfg-fields').innerHTML = ALL_FIELDS.map(f =>
+      `<label class="checkline"><input type="checkbox" value="${f}" ${tracked.includes(f)?'checked':''}> ${f}</label>`).join('');
+    document.getElementById('config-overlay').classList.add('visible');
+  }).catch(e => toast(e.message, 'error'));
+}
+
+async function saveConfig() {
+  const fields = [...document.querySelectorAll('#cfg-fields input:checked')].map(i => i.value);
+  const body = {
+    enabled: document.getElementById('cfg-enabled').checked,
+    check_interval_seconds: parseInt(document.getElementById('cfg-interval').value) || 3600,
+    tracked_fields: fields,
+    unmanaged_to_audit: document.getElementById('cfg-unmanaged').checked,
+  };
+  try { await api('/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); toast('Configuration saved', 'success'); closeOverlay('config-overlay'); loadSummary(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+function openKeys() {
+  document.getElementById('key-reveal').style.display = 'none';
+  document.getElementById('keys-overlay').classList.add('visible');
+  loadKeys();
+}
+
+async function loadKeys() {
+  const box = document.getElementById('keys-list');
+  try {
+    const data = await api('/apikeys');
+    const keys = data.keys || [];
+    if (!keys.length) { box.innerHTML = '<div class="empty-state">No API keys yet.</div>'; return; }
+    box.innerHTML = '<table class="data"><thead><tr><th>Environment</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>' +
+      keys.map(k => `<tr>
+        <td>${escapeHtml(k.environment)}</td>
+        <td>${escapeHtml(k.created_at || '')}</td>
+        <td>${escapeHtml(k.last_used_at || '—')}</td>
+        <td><span class="badge ${k.revoked?'open':'resolved'}">${k.revoked?'revoked':'active'}</span></td>
+        <td>${k.revoked?'':`<button class="btn-stop" style="padding:4px 10px;font-size:0.8em;" onclick="revokeKey(${k.id})">Revoke</button>`}</td>
+      </tr>`).join('') + '</tbody></table>';
+  } catch (e) { box.innerHTML = '<div class="empty-state">' + escapeHtml(e.message) + '</div>'; }
+}
+
+async function createKey() {
+  const environment = document.getElementById('key-env').value.trim() || 'default';
+  try {
+    const r = await api('/apikeys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ environment }) });
+    document.getElementById('key-value').textContent = r.key;
+    document.getElementById('key-reveal').style.display = '';
+    await loadKeys();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function revokeKey(id) {
+  try { await api('/apikeys/' + id, { method: 'DELETE' }); toast('Key revoked', 'info'); loadKeys(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+loadSummary().then(() => { loadDrifts(); loadResources(); });
+</script>
+</body>
+</html>

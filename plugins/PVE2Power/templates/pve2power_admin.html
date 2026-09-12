@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE2 Power — Power Scheduler</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; padding:20px; }
+  .container { max-width:1200px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .header h1 { font-size:1.5em; color:#333; display:flex; align-items:center; gap:10px; }
+  .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .card .label { color:#666; font-size:0.8em; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; }
+  .card .value { font-size:1.8em; font-weight:700; color:#333; margin-top:2px; }
+  .card .sub { color:#999; font-size:0.85em; margin-top:4px; }
+  .toolbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar button { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .toolbar button:hover { opacity:0.85; }
+  .toolbar button:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-save { background:#667eea; color:white; }
+  .btn-sync { background:#059669; color:white; }
+  .btn-config { background:#6b7280; color:white; }
+  .filters { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .filters input { padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .badge { padding:2px 8px; border-radius:10px; font-size:0.78em; font-weight:600; display:inline-block; }
+  .badge.running { background:#d1fae5; color:#059669; }
+  .badge.stopped { background:#fee2e2; color:#dc2626; }
+  .badge.vm { background:#e0e7ff; color:#3730a3; }
+  .badge.lxc { background:#fef3c7; color:#d97706; }
+  .schedule-grid { display:grid; gap:16px; }
+  .schedule-card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .schedule-card.disabled { opacity:0.5; }
+  .sched-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+  .sched-header .sched-name { font-weight:600; font-size:1.05em; }
+  .sched-toggle { display:flex; align-items:center; gap:6px; }
+  .sched-toggle input[type=checkbox] { width:18px; height:18px; cursor:pointer; }
+  .sched-times { display:flex; gap:24px; flex-wrap:wrap; margin-bottom:12px; }
+  .sched-times label { font-size:0.85em; color:#666; display:block; margin-bottom:2px; }
+  .sched-times input[type=time] { padding:6px 10px; border:1px solid #ddd; border-radius:6px; font-size:0.95em; font-family:monospace; }
+  .sched-times input[type=time]:focus { outline:none; border-color:#667eea; }
+  .time-block { display:flex; align-items:center; gap:12px; background:#f9fafb; padding:10px 14px; border-radius:8px; }
+  .time-block .time-label { font-weight:600; color:#444; font-size:0.9em; min-width:60px; }
+  .days-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .day-btn { padding:4px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; font-size:0.82em; background:white; color:#555; transition:all 0.15s; }
+  .day-btn.active { background:#667eea; color:white; border-color:#667eea; }
+  .day-btn.weekend { color:#d97706; }
+  .day-btn.weekend.active { background:#d97706; border-color:#d97706; color:white; }
+  .sched-status { font-size:0.85em; color:#666; margin-top:6px; display:flex; align-items:center; gap:8px; }
+  .sched-actions { margin-top:10px; }
+  .sched-actions button { padding:6px 14px; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.85em; }
+  .sched-actions button:hover { opacity:0.85; }
+  .btn-save-sched { background:#667eea; color:white; }
+  .btn-remove-sched { background:#fee2e2; color:#dc2626; }
+  .btn-start { background:#059669; color:white; }
+  .btn-stop { background:#dc2626; color:white; }
+  .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; }
+  .overlay.visible { display:flex; }
+  .modal { background:white; border-radius:12px; padding:32px; max-width:420px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.2); }
+  .modal h2 { font-size:1.2em; margin-bottom:20px; color:#333; }
+  .modal .form-group { margin-bottom:16px; }
+  .modal .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.9em; }
+  .modal .form-group input[type=text],.modal .form-group select { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .modal .form-group input:focus,.modal .form-group select:focus { outline:none; border-color:#667eea; }
+  .modal .btn-row { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .modal .btn-row button { padding:9px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  .modal .btn-row .btn-cancel { background:#e5e7eb; color:#333; }
+  .modal .btn-save-config { background:#667eea; color:white; }
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:8px; color:white; font-weight:500; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; opacity:0; transform:translateY(10px); transition:all 0.3s ease; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#059669; }
+  .toast.error { background:#dc2626; }
+  .toast.info { background:#3730a3; }
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .empty-state { text-align:center; color:#999; padding:40px; }
+  .loading { text-align:center; color:#999; padding:40px; }
+  @media(max-width:600px) { .summary-grid { grid-template-columns:1fr 1fr; } .sched-times { flex-direction:column; gap:12px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <a href="/admin/hub" style="text-decoration:none;color:#667eea;font-weight:600;font-size:0.9em;white-space:nowrap;">&#8592; Hub</a>
+    <h1>PVE2 Power <span style="font-size:0.6em;color:#999;font-weight:400;">Power Scheduler</span></h1>
+    <div class="header-right">
+      <span style="color:#999;font-size:0.85em;" id="tz-label"></span>
+      <button class="btn-config" onclick="openConfig()">&#9881; Config</button>
+    </div>
+  </div>
+
+  <details class="info-note" style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 16px;margin:0 0 20px 0;font-size:0.88em;">
+<summary style="cursor:pointer;font-weight:600;color:#4338ca;user-select:none;">&#8505;&#65039; How the power scheduler works &amp; why</summary>
+<div style="margin-top:10px;color:#444;line-height:1.6;"><p><strong>How it works:</strong> each machine can have a schedule — on/off windows for weekdays and the weekend, active days, timezone. Every check computes whether each machine <em>should</em> be on right now, reads its <em>current</em> status live from Proxmox (never from the cache, so a machine you toggled manually is respected) and issues a start or stop only when the two disagree.</p><p><strong>Why:</strong> cut energy waste for machines that are not needed 24/7 — workstations, build rigs, test boxes — without cron scripts on the host.</p><p><strong>Safety:</strong> only machines with an <em>enabled</em> schedule are ever touched; every action is recorded (last action + timestamp, shown per machine); after acting, the cache is updated so the UI reflects reality immediately; with multiple replicas only the lease holder runs checks, so nothing double-fires.</p><p><strong>Note:</strong> stop is a graceful ACPI shutdown — the guest OS must handle it (install qemu-guest-agent / enable ACPI).</p></div>
+</details>
+
+<div class="summary-grid" id="summary"></div>
+
+  <div class="toolbar">
+    <button class="btn-sync" onclick="runCheck()" id="check-btn">&#8635; Check & Act Now</button>
+    <button class="btn-start" onclick="startScheduler()" id="sched-start-btn">&#9654; Start BG</button>
+    <button class="btn-stop" onclick="stopScheduler()" id="sched-stop-btn" style="display:none;">&#9632; Stop BG</button>
+    <span style="color:#999;font-size:0.85em;margin-left:8px;" id="sched-status"></span>
+  </div>
+
+  <div class="filters">
+    <input type="text" id="filter-search" placeholder="Search machine..." oninput="filterCards()">
+  </div>
+
+  <div id="schedule-container"><div class="loading">Loading machines...</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="config-overlay">
+  <div class="modal">
+    <h2>&#9881; Power Scheduler Configuration</h2>
+    <div id="config-form"></div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api/plugins/pve2power';
+
+async function api(path, opts) {
+  const r = await fetch(BASE + path, opts || {});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || e.error || r.statusText); }
+  return r.json();
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (type||'info') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+let allMachines = [];
+
+async function loadSummary() {
+  try {
+    const data = await api('/config');
+    const cfg = data.config || {};
+    document.getElementById('tz-label').textContent = 'Timezone: ' + (cfg.timezone||'UTC');
+    const st = await api('/status');
+    document.getElementById('summary').innerHTML =
+      '<div class="card"><div class="label">Status</div><div class="value" style="color:' + (data.configured ? '#059669' : '#999') + ';font-size:1.2em;">' + (data.configured ? 'Active' : 'Inactive') + '</div></div>' +
+      '<div class="card"><div class="label">Schedules</div><div class="value">' + (st.total_schedules||0) + '</div><div class="sub">' + (st.enabled_schedules||0) + ' enabled</div></div>' +
+      '<div class="card"><div class="label">Should Be On</div><div class="value">' + (st.should_be_on||0) + '</div></div>' +
+      '<div class="card"><div class="label">Timezone</div><div class="value" style="font-size:1em;">' + (cfg.timezone||'UTC') + '</div></div>';
+  } catch(e) {}
+}
+
+async function loadMachines() {
+  try {
+    const data = await api('/machines');
+    allMachines = data.machines || [];
+    renderCards();
+  } catch(e) {
+    document.getElementById('schedule-container').innerHTML = '<div class="empty-state" style="color:#dc2626;">Error: ' + e.message + '</div>';
+  }
+}
+
+function renderCards() {
+  const el = document.getElementById('schedule-container');
+  if (!allMachines.length) { el.innerHTML = '<div class="empty-state">No machines found — run PVE2Core sync first</div>'; return; }
+  el.innerHTML = '<div class="schedule-grid">' + allMachines.map(m => renderCard(m)).join('') + '</div>';
+}
+
+function renderCard(m) {
+  const s = m.schedule || {};
+  const enabled = s.enabled !== undefined ? s.enabled : false;
+  const disabledClass = enabled ? '' : ' disabled';
+  const wdStart = s.weekday_start_time || '08:00';
+  const wdStop = s.weekday_stop_time || '18:00';
+  const weStart = s.weekend_start_time || '10:00';
+  const weStop = s.weekend_stop_time || '20:00';
+  const dayStates = DAYS.map(d => s[d] !== undefined ? s[d] : (d==='saturday'||d==='sunday' ? false : true));
+  const lastAct = s.last_action || '';
+  const lastActAt = s.last_action_at || '';
+  const expected = m.should_be_on;
+  const actual = m.status;
+
+  let statusHtml = '';
+  if (enabled) {
+    const match = expected !== null ? (expected ? 'should be ON' : 'should be OFF') : '';
+    statusHtml = '<span class="sched-status">' +
+      (actual === 'running' ? '&#128994; Running' : '&#128997; Stopped') +
+      ' &nbsp;|&nbsp; ' + match +
+      ' &nbsp;|&nbsp; <span style="color:' + (expected === true ? (actual==='running' ? '#059669' : '#dc2626') : (actual==='stopped' ? '#059669' : '#d97706')) + ';">' +
+      (expected === true ? (actual==='running' ? '&#10003; Synced' : '&#9888; Mismatch') : (actual==='stopped' ? '&#10003; Synced' : '&#9888; Mismatch')) +
+      '</span>' +
+      (lastAct ? ' &nbsp;|&nbsp; Last: ' + lastAct + (lastActAt ? ' ' + relTime(lastActAt) : '') : '') +
+      '</span>';
+  } else {
+    statusHtml = '<span class="sched-status">Schedule disabled</span>';
+  }
+
+  const daysHtml = DAYS.map((d,i) =>
+    '<span class="day-btn' + (dayStates[i] ? ' active' : '') + (i>=5 ? ' weekend' : '') + '" onclick="toggleDay(\'' + m.machine_id + '\',' + i + ')">' + DAY_LABELS[i] + '</span>'
+  ).join('');
+
+  return '<div class="schedule-card' + disabledClass + '" id="card-' + m.machine_id + '">' +
+    '<div class="sched-header">' +
+      '<div class="sched-name">' + escapeHtml(m.machine_name || '#' + m.machine_id) + ' <span style="font-weight:400;color:#999;font-size:0.85em;">#' + m.machine_id + ' on ' + m.node + '</span> <span class="badge ' + m.type + '">' + m.type.toUpperCase() + '</span> <span class="badge ' + m.status + '">' + m.status + '</span></div>' +
+      '<div class="sched-toggle"><label style="font-size:0.85em;color:#666;">Schedule</label> <input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleEnabled(\'' + m.machine_id + '\',this.checked)"></div>' +
+    '</div>' +
+    '<div class="sched-times">' +
+      '<div class="time-block"><div class="time-label">Weekday</div><label style="font-size:0.8em;color:#666;">Start</label> <input type="time" value="' + wdStart + '" onchange="updateTime(\'' + m.machine_id + '\',\'weekday_start\',this.value)"> <label style="font-size:0.8em;color:#666;margin-left:8px;">Stop</label> <input type="time" value="' + wdStop + '" onchange="updateTime(\'' + m.machine_id + '\',\'weekday_stop\',this.value)"></div>' +
+      '<div class="time-block"><div class="time-label">Weekend</div><label style="font-size:0.8em;color:#666;">Start</label> <input type="time" value="' + weStart + '" onchange="updateTime(\'' + m.machine_id + '\',\'weekend_start\',this.value)"> <label style="font-size:0.8em;color:#666;margin-left:8px;">Stop</label> <input type="time" value="' + weStop + '" onchange="updateTime(\'' + m.machine_id + '\',\'weekend_stop\',this.value)"></div>' +
+    '</div>' +
+    '<div style="margin-bottom:10px;"><div style="font-size:0.85em;color:#666;margin-bottom:4px;">Active days</div><div class="days-row">' + daysHtml + '</div></div>' +
+    statusHtml +
+    '<div class="sched-actions">' +
+      '<button class="btn-save-sched" onclick="saveCard(\'' + m.machine_id + '\')">&#10003; Save</button> ' +
+      (enabled ? '<button class="btn-remove-sched" onclick="removeCard(\'' + m.machine_id + '\')">&#128465; Remove</button>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function toggleEnabled(id, checked) {
+  const m = allMachines.find(x => x.machine_id === id);
+  if (m) {
+    if (!m.schedule) m.schedule = {};
+    m.schedule.enabled = checked;
+    renderCards();
+  }
+}
+
+function toggleDay(id, idx) {
+  const m = allMachines.find(x => x.machine_id === id);
+  if (m) {
+    if (!m.schedule) m.schedule = {};
+    const day = DAYS[idx];
+    m.schedule[day] = !m.schedule[day];
+    renderCards();
+  }
+}
+
+function updateTime(id, field, val) {
+  const m = allMachines.find(x => x.machine_id === id);
+  if (m) {
+    if (!m.schedule) m.schedule = {};
+    const key = field === 'weekday_start' ? 'weekday_start_time' :
+                field === 'weekday_stop' ? 'weekday_stop_time' :
+                field === 'weekend_start' ? 'weekend_start_time' : 'weekend_stop_time';
+    m.schedule[key] = val;
+  }
+}
+
+async function saveCard(id) {
+  const m = allMachines.find(x => x.machine_id === id);
+  if (!m) return;
+  const s = m.schedule || {};
+  const body = {
+    machine_id: id,
+    machine_name: m.machine_name,
+    enabled: s.enabled || false,
+    weekday_start_time: s.weekday_start_time || '08:00',
+    weekday_stop_time: s.weekday_stop_time || '18:00',
+    weekend_start_time: s.weekend_start_time || '10:00',
+    weekend_stop_time: s.weekend_stop_time || '20:00',
+    monday: s.monday !== undefined ? s.monday : true,
+    tuesday: s.tuesday !== undefined ? s.tuesday : true,
+    wednesday: s.wednesday !== undefined ? s.wednesday : true,
+    thursday: s.thursday !== undefined ? s.thursday : true,
+    friday: s.friday !== undefined ? s.friday : true,
+    saturday: s.saturday !== undefined ? s.saturday : false,
+    sunday: s.sunday !== undefined ? s.sunday : false,
+    force_stop_timeout: 5,
+  };
+  try {
+    await api('/schedules/' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    toast('&#10003; Schedule saved for ' + (m.machine_name||'#'+id), 'success');
+    loadMachines();
+    loadSummary();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function removeCard(id) {
+  try {
+    await api('/schedules/' + id, { method:'DELETE' });
+    toast('Schedule removed', 'info');
+    loadMachines();
+    loadSummary();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function filterCards() {
+  const q = document.getElementById('filter-search').value.toLowerCase();
+  document.querySelectorAll('.schedule-card').forEach(card => {
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+async function runCheck() {
+  const btn = document.getElementById('check-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...';
+  document.getElementById('status-msg').textContent = '';
+  try {
+    const result = await api('/sync', { method:'POST' });
+    const acts = result.actions || [];
+    if (acts.length) {
+      const msgs = acts.map(a => a.machine_id + ':' + a.action).join(', ');
+      toast('&#8635; ' + acts.length + ' actions: ' + msgs, 'success');
+    } else {
+      toast('All machines match their schedules', 'info');
+    }
+    loadMachines();
+    loadSummary();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#8635; Check & Act Now';
+}
+
+async function loadSchedulerStatus() {
+  try {
+    const st = await api('/scheduler/status');
+    const running = st.running;
+    document.getElementById('sched-start-btn').style.display = running ? 'none' : '';
+    document.getElementById('sched-stop-btn').style.display = running ? '' : 'none';
+    const nextRun = st.job ? st.job.next_run : null;
+    document.getElementById('sched-status').textContent = running ? 'Background: ON' + (nextRun ? ' (next: ' + new Date(nextRun).toLocaleTimeString() + ')' : '') : 'Background: OFF';
+  } catch(e) {}
+}
+
+async function startScheduler() {
+  const btn = document.getElementById('sched-start-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('/scheduler/start', { method:'POST' });
+    toast(r.started ? 'Background check started' : 'Already running', r.started ? 'success' : 'info');
+    loadSchedulerStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9654; Start BG';
+}
+
+async function stopScheduler() {
+  const btn = document.getElementById('sched-stop-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('/scheduler/stop', { method:'POST' });
+    toast(r.stopped ? 'Background check stopped' : 'Not running', r.stopped ? 'info' : 'info');
+    loadSchedulerStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9632; Stop BG';
+}
+
+function relTime(d) {
+  if (!d) return '';
+  const diff = (Date.now() - new Date(d).getTime()) / 1000;
+  if (diff < 60) return Math.floor(diff) + 's ago';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+async function openConfig() {
+  const overlay = document.getElementById('config-overlay');
+  overlay.classList.add('visible');
+  const form = document.getElementById('config-form');
+  form.innerHTML = '<div class="loading">Loading config...</div>';
+  try {
+    const data = await api('/config');
+    const c = data.config || {};
+    form.innerHTML =
+      '<div class="form-group"><label>Timezone</label><select id="cfg-tz">' +
+        ['UTC','Europe/Rome','Europe/London','Europe/Paris','Europe/Berlin','Europe/Madrid','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Asia/Tokyo','Asia/Shanghai','Asia/Kolkata','Australia/Sydney','Pacific/Auckland'].map(tz =>
+          '<option value="' + tz + '"' + (c.timezone===tz?' selected':'') + '>' + tz + '</option>'
+        ).join('') +
+      '</select></div>' +
+      '<div class="form-group"><label>Poll Interval (seconds)</label><input type="number" id="cfg-interval" value="' + (c.poll_interval_seconds||60) + '" min="10" max="3600"></div>' +
+      '<div class="form-group"><label>Force Stop Timeout (minutes)</label><input type="number" id="cfg-timeout" value="' + (c.default_force_stop_timeout||5) + '" min="1" max="60"></div>' +
+      '<div class="btn-row">' +
+        '<button class="btn-cancel" onclick="closeConfig()">Cancel</button>' +
+        '<button class="btn-save-config" onclick="saveConfig()">&#10003; Save Config</button>' +
+      '</div>';
+  } catch(e) { form.innerHTML = '<div style="color:#dc2626;">Error: ' + e.message + '</div>'; }
+}
+
+function closeConfig() { document.getElementById('config-overlay').classList.remove('visible'); }
+
+async function saveConfig() {
+  const body = {
+    enabled: true,
+    timezone: document.getElementById('cfg-tz').value,
+    poll_interval_seconds: parseInt(document.getElementById('cfg-interval').value) || 60,
+    default_force_stop_timeout: parseInt(document.getElementById('cfg-timeout').value) || 5,
+  };
+  try {
+    await api('/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    toast('&#10003; Configuration saved', 'success');
+    closeConfig();
+    loadSummary();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+loadSummary(); loadMachines(); loadSchedulerStatus();
+</script>
+</body>
+</html>

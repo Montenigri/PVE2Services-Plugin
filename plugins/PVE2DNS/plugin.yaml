@@ -1,0 +1,12 @@
+id: pve2dns
+name: PVE2 DNS
+version: 1.0.0
+core_compat: ">=0.1.0,<2.0.0"
+description: DNS synchronization connector with Pi-hole and AdGuard support.
+author: PVE2 Services Contributors
+icon: "🔗"
+capabilities:
+  reads: [machine_cache, connector_config]
+  writes: [dns_records]
+trust_tier: trusted
+license_required: false

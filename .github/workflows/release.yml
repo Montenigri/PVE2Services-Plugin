@@ -1,0 +1,78 @@
+name: Release plugins
+
+# Builds, signs and publishes the plugins listed in plugins/store_plugins.txt
+# to the PVE2 plugin store (S3/MinIO). The first-party bundled set is NOT
+# published here: it ships inside the core image (the core release workflow
+# checks out this repo and copies it in).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  PVE2_SIGNING_KEY_PATH: /tmp/plugin_signing.pem
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install the core library
+        env:
+          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2' }}
+        run: pip install "$PVE2_CORE_SPEC"
+
+      - name: Write signing key from secret
+        run: |
+          printf '%s' "${{ secrets.PVE2_PLUGIN_SIGNING_KEY }}" > "${{ env.PVE2_SIGNING_KEY_PATH }}"
+          chmod 600 "${{ env.PVE2_SIGNING_KEY_PATH }}"
+
+      - name: Collect plugins to publish
+        id: collect
+        run: |
+          set -euo pipefail
+          dirs=()
+          while read -r line; do
+            line="${line%%#*}"
+            line="$(echo "$line" | xargs)"
+            [ -z "$line" ] && continue
+            [ -d "plugins/$line" ] || { echo "::error::plugins/$line not found"; exit 1; }
+            dirs+=("plugins/$line")
+          done < plugins/store_plugins.txt
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No plugins listed in plugins/store_plugins.txt — nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf 'publish=true\n' >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${dirs[@]}" > /tmp/plugin_dirs.txt
+          cat /tmp/plugin_dirs.txt
+
+      - name: Build, sign and publish to the store
+        if: steps.collect.outputs.publish == 'true'
+        env:
+          PVE2_STORE_ENDPOINT: ${{ secrets.PVE2_STORE_ENDPOINT }}
+          PVE2_STORE_BUCKET: ${{ secrets.PVE2_STORE_BUCKET }}
+          PVE2_STORE_ACCESS_KEY: ${{ secrets.PVE2_STORE_ACCESS_KEY }}
+          PVE2_STORE_SECRET_KEY: ${{ secrets.PVE2_STORE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          mapfile -t dirs < /tmp/plugin_dirs.txt
+          python tools/build_plugin.py "${dirs[@]}" --out build \
+            --signing-key "${{ env.PVE2_SIGNING_KEY_PATH }}" --publish
+
+      - name: Show trusted key fingerprint
+        if: steps.collect.outputs.publish == 'true'
+        run: python tools/build_plugin.py --show-fingerprint

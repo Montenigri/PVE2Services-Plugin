@@ -1,0 +1,291 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE2 Notify — Notifications</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; padding:20px; }
+  .container { max-width:900px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .header h1 { font-size:1.5em; color:#333; display:flex; align-items:center; gap:10px; }
+  .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+  .card .label { color:#666; font-size:0.8em; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; }
+  .card .value { font-size:1.8em; font-weight:700; color:#333; margin-top:2px; }
+  .toolbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar button { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .toolbar button:hover { opacity:0.85; }
+  .toolbar button:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-check { background:#667eea; color:white; }
+  .btn-sync { background:#059669; color:white; }
+  .btn-config { background:#6b7280; color:white; }
+  .btn-start { background:#059669; color:white; }
+  .btn-stop { background:#dc2626; color:white; }
+  .badge { padding:2px 8px; border-radius:10px; font-size:0.78em; font-weight:600; display:inline-block; }
+  .badge.started { background:#d1fae5; color:#059669; }
+  .badge.stopped { background:#fee2e2; color:#dc2626; }
+  .badge.added { background:#e0e7ff; color:#3730a3; }
+  .badge.removed { background:#fef3c7; color:#d97706; }
+  .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; }
+  .overlay.visible { display:flex; }
+  .modal { background:white; border-radius:12px; padding:32px; max-width:560px; width:90%; max-height:85vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.2); }
+  .modal h2 { font-size:1.2em; margin-bottom:20px; color:#333; }
+  .modal h3 { font-size:1em; margin:16px 0 10px; color:#555; border-bottom:1px solid #eee; padding-bottom:4px; }
+  .modal .form-group { margin-bottom:14px; }
+  .modal .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.9em; }
+  .modal .form-group input[type=text],.modal .form-group input[type=password],.modal .form-group input[type=number] { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .modal .form-group input:focus { outline:none; border-color:#667eea; }
+  .modal .form-group .hint { color:#999; font-size:0.8em; margin-top:2px; }
+  .modal .btn-row { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .modal .btn-row button { padding:9px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  .modal .btn-row .btn-cancel { background:#e5e7eb; color:#333; }
+  .modal .btn-save-config { background:#667eea; color:white; }
+  .events { background:white; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.1); overflow:hidden; }
+  .event-row { display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #eee; gap:12px; font-size:0.9em; }
+  .event-row:last-child { border-bottom:none; }
+  .event-row .ev-icon { font-size:1.2em; width:28px; text-align:center; }
+  .event-row .ev-info { flex:1; }
+  .event-row .ev-info .ev-name { font-weight:600; color:#333; }
+  .event-row .ev-info .ev-detail { color:#999; font-size:0.85em; margin-top:2px; }
+  .empty-state { text-align:center; color:#999; padding:40px; }
+  .loading { text-align:center; color:#999; padding:40px; }
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:8px; color:white; font-weight:500; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; opacity:0; transform:translateY(10px); transition:all 0.3s ease; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#059669; }
+  .toast.error { background:#dc2626; }
+  .toast.info { background:#3730a3; }
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media(max-width:600px) { .summary-grid { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <a href="/admin/hub" style="text-decoration:none;color:#667eea;font-weight:600;font-size:0.9em;white-space:nowrap;">&#8592; Hub</a>
+    <h1>PVE2 Notify <span style="font-size:0.6em;color:#999;font-weight:400;">State Change Notifications</span></h1>
+    <div class="header-right">
+      <span style="color:#999;font-size:0.85em;" id="status-label"></span>
+      <button class="btn-config" onclick="openConfig()">&#9881; Config</button>
+    </div>
+  </div>
+
+  <details class="info-note" style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 16px;margin:0 0 20px 0;font-size:0.88em;">
+<summary style="cursor:pointer;font-weight:600;color:#4338ca;user-select:none;">&#8505;&#65039; How notifications work &amp; why</summary>
+<div style="margin-top:10px;color:#444;line-height:1.6;"><p><strong>How it works:</strong> every check stores a snapshot of all machine states; the next check diffs against it. Differences become events — machine added, removed, started or stopped — and each event is formatted and sent to every enabled provider (Discord, Slack, Mattermost, Telegram).</p><p><strong>Why snapshots:</strong> only <em>changes</em> generate messages. A quiet cluster sends nothing — when something pings you at 3am, it actually happened.</p><p><strong>Send Test</strong> validates your provider credentials immediately without waiting for a real event.</p></div>
+</details>
+
+<div class="summary-grid" id="summary"></div>
+
+  <div class="toolbar">
+    <button class="btn-sync" onclick="runSync()" id="sync-btn">&#8635; Check & Notify</button>
+    <button class="btn-check" onclick="sendTest()" id="test-btn">&#9654; Send Test</button>
+    <button class="btn-start" onclick="startScheduler()" id="sched-start-btn">&#9654; Start BG</button>
+    <button class="btn-stop" onclick="stopScheduler()" id="sched-stop-btn" style="display:none;">&#9632; Stop BG</button>
+    <span style="color:#999;font-size:0.85em;margin-left:8px;" id="sched-status"></span>
+  </div>
+
+  <h2 style="margin-bottom:12px;font-size:1.1em;color:#555;">Recent Events</h2>
+  <div id="events-container"><div class="loading">No events yet — run Check & Notify</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="config-overlay">
+  <div class="modal">
+    <h2>&#9881; Notification Provider Configuration</h2>
+    <div id="config-form"></div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api/plugins/pve2notify';
+
+async function api(path, opts) {
+  const r = await fetch(BASE + path, opts || {});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || e.error || r.statusText); }
+  return r.json();
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (type||'info') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+const EVENT_ICONS = { started: '&#128994;', stopped: '&#128997;', added: '&#128309;', removed: '&#128992;' };
+
+async function loadSummary() {
+  try {
+    const data = await api('/config');
+    const cfg = data.config || {};
+    const sync = data.sync_state || {};
+    const providers = [
+      cfg.discord_enabled ? 'Discord' : '',
+      cfg.slack_enabled ? 'Slack' : '',
+      cfg.mattermost_enabled ? 'Mattermost' : '',
+      cfg.telegram_enabled ? 'Telegram' : '',
+    ].filter(Boolean);
+    document.getElementById('status-label').textContent = data.configured ? 'Active' : 'Not configured';
+    document.getElementById('summary').innerHTML =
+      '<div class="card"><div class="label">Status</div><div class="value" style="color:' + (data.configured ? '#059669' : '#999') + ';font-size:1.2em;">' + (data.configured ? 'Configured' : 'Inactive') + '</div></div>' +
+      '<div class="card"><div class="label">Providers</div><div class="value" style="font-size:1em;">' + (providers.length ? providers.join(', ') : 'None') + '</div></div>' +
+      '<div class="card"><div class="label">Notifs Sent</div><div class="value">' + (sync.items_synced||0) + '</div></div>' +
+      '<div class="card"><div class="label">Last Check</div><div class="value" style="font-size:0.9em;">' + (sync.last_sync_at ? new Date(sync.last_sync_at).toLocaleString() : '—') + '</div></div>';
+  } catch(e) {}
+}
+
+async function runSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...';
+  document.getElementById('status-msg').textContent = '';
+  try {
+    const result = await api('/sync', { method:'POST' });
+    if (result.events && result.events.length) {
+      toast('&#8635; ' + result.notifications_sent + ' notifications sent for ' + result.events.length + ' events', 'success');
+    } else {
+      toast('No changes detected', 'info');
+    }
+    loadSummary();
+    renderEvents(result.events || []);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#8635; Check & Notify';
+}
+
+async function sendTest() {
+  const btn = document.getElementById('test-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Sending...';
+  try {
+    const result = await api('/test', { method:'POST' });
+    if (result.tested) {
+      const msgs = (result.results||[]).map(r => r.provider + ': ' + (r.success ? 'OK' : 'FAIL'));
+      toast('&#9654; ' + msgs.join(' | '), 'success');
+    } else {
+      toast('Test failed: ' + (result.error||'unknown'), 'error');
+    }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9654; Send Test';
+}
+
+async function loadSchedulerStatus() {
+  try {
+    const st = await api('/scheduler/status');
+    const running = st.running;
+    document.getElementById('sched-start-btn').style.display = running ? 'none' : '';
+    document.getElementById('sched-stop-btn').style.display = running ? '' : 'none';
+    const nextRun = st.job ? st.job.next_run : null;
+    document.getElementById('sched-status').textContent = running ? 'BG: ON' + (nextRun ? ' (next: ' + new Date(nextRun).toLocaleTimeString() + ')' : '') : 'BG: OFF';
+  } catch(e) {}
+}
+
+async function startScheduler() {
+  const btn = document.getElementById('sched-start-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('/scheduler/start', { method:'POST' });
+    toast(r.started ? 'Background check started' : 'Already running', r.started ? 'success' : 'info');
+    loadSchedulerStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9654; Start BG';
+}
+
+async function stopScheduler() {
+  const btn = document.getElementById('sched-stop-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('/scheduler/stop', { method:'POST' });
+    toast(r.stopped ? 'Background check stopped' : 'Not running', r.stopped ? 'info' : 'info');
+    loadSchedulerStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9632; Stop BG';
+}
+
+function renderEvents(events) {
+  const el = document.getElementById('events-container');
+  if (!events.length) { el.innerHTML = '<div class="empty-state">No events yet</div>'; return; }
+  el.innerHTML = '<div class="events">' + events.map(e => {
+    const name = e.machine_name || '#' + e.machine_id;
+    const icon = EVENT_ICONS[e.event_type] || '&#x2753;';
+    return '<div class="event-row">' +
+      '<div class="ev-icon">' + icon + '</div>' +
+      '<div class="ev-info">' +
+        '<div class="ev-name">' + escapeHtml(name) + ' <span class="badge ' + e.event_type + '">' + e.event_type + '</span></div>' +
+        '<div class="ev-detail">#' + e.machine_id + ' on ' + (e.node||'?') + ' | ' + (e.machine_type||'vm').toUpperCase() + (e.previous_status ? ' | ' + e.previous_status + ' &rarr; ' + e.status : '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+async function openConfig() {
+  const overlay = document.getElementById('config-overlay');
+  overlay.classList.add('visible');
+  const form = document.getElementById('config-form');
+  form.innerHTML = '<div class="loading">Loading config...</div>';
+  try {
+    const data = await api('/config');
+    const c = data.config || {};
+    form.innerHTML =
+      '<div class="form-group"><label>Poll Interval (seconds)</label><input type="number" id="cfg-interval" value="' + (c.poll_interval_seconds||60) + '" min="10" max="3600"></div>' +
+      '<h3>Discord</h3>' +
+      '<div class="form-group"><label><input type="checkbox" id="cfg-discord-enabled"' + (c.discord_enabled ? ' checked' : '') + '> Enable Discord</label></div>' +
+      '<div class="form-group"><label>Webhook URL</label><input type="text" id="cfg-discord-url" value="' + escapeHtml(c.discord_webhook_url||'') + '" placeholder="https://discord.com/api/webhooks/..."></div>' +
+      '<h3>Slack</h3>' +
+      '<div class="form-group"><label><input type="checkbox" id="cfg-slack-enabled"' + (c.slack_enabled ? ' checked' : '') + '> Enable Slack</label></div>' +
+      '<div class="form-group"><label>Webhook URL</label><input type="text" id="cfg-slack-url" value="' + escapeHtml(c.slack_webhook_url||'') + '" placeholder="https://hooks.slack.com/services/..."></div>' +
+      '<h3>Mattermost</h3>' +
+      '<div class="form-group"><label><input type="checkbox" id="cfg-mm-enabled"' + (c.mattermost_enabled ? ' checked' : '') + '> Enable Mattermost</label></div>' +
+      '<div class="form-group"><label>Webhook URL</label><input type="text" id="cfg-mm-url" value="' + escapeHtml(c.mattermost_webhook_url||'') + '" placeholder="https://mattermost.example.com/hooks/..."></div>' +
+      '<h3>Telegram</h3>' +
+      '<div class="form-group"><label><input type="checkbox" id="cfg-tg-enabled"' + (c.telegram_enabled ? ' checked' : '') + '> Enable Telegram</label></div>' +
+      '<div class="form-group"><label>Bot Token</label><input type="password" id="cfg-tg-token" value="' + escapeHtml(c.telegram_bot_token||'') + '" placeholder="123456:ABC-DEF1234..."></div>' +
+      '<div class="form-group"><label>Chat ID</label><input type="text" id="cfg-tg-chat" value="' + escapeHtml(c.telegram_chat_id||'') + '" placeholder="-1001234567890"></div>' +
+      '<h3>Events to Notify</h3>' +
+      '<div class="form-group"><label style="display:flex;align-items:center;gap:6px;font-size:0.95em;"><input type="checkbox" id="cfg-notify-started"' + (c.notify_started !== false ? ' checked' : '') + '> <span style="color:#059669;">&#128994;</span> Machine Started</label></div>' +
+      '<div class="form-group"><label style="display:flex;align-items:center;gap:6px;font-size:0.95em;"><input type="checkbox" id="cfg-notify-stopped"' + (c.notify_stopped !== false ? ' checked' : '') + '> <span style="color:#dc2626;">&#128997;</span> Machine Stopped</label></div>' +
+      '<div class="form-group"><label style="display:flex;align-items:center;gap:6px;font-size:0.95em;"><input type="checkbox" id="cfg-notify-added"' + (c.notify_added !== false ? ' checked' : '') + '> <span style="color:#3730a3;">&#128309;</span> Machine Added</label></div>' +
+      '<div class="form-group"><label style="display:flex;align-items:center;gap:6px;font-size:0.95em;"><input type="checkbox" id="cfg-notify-removed"' + (c.notify_removed !== false ? ' checked' : '') + '> <span style="color:#d97706;">&#128992;</span> Machine Removed</label></div>' +
+      '<div class="btn-row">' +
+        '<button class="btn-cancel" onclick="closeConfig()">Cancel</button>' +
+        '<button class="btn-save-config" onclick="saveConfig()">&#10003; Save Config</button>' +
+      '</div>';
+  } catch(e) { form.innerHTML = '<div style="color:#dc2626;">Error: ' + e.message + '</div>'; }
+}
+
+function closeConfig() { document.getElementById('config-overlay').classList.remove('visible'); }
+
+async function saveConfig() {
+  const body = {
+    enabled: true,
+    poll_interval_seconds: parseInt(document.getElementById('cfg-interval').value) || 60,
+    discord_enabled: document.getElementById('cfg-discord-enabled').checked,
+    discord_webhook_url: document.getElementById('cfg-discord-url').value,
+    slack_enabled: document.getElementById('cfg-slack-enabled').checked,
+    slack_webhook_url: document.getElementById('cfg-slack-url').value,
+    mattermost_enabled: document.getElementById('cfg-mm-enabled').checked,
+    mattermost_webhook_url: document.getElementById('cfg-mm-url').value,
+    telegram_enabled: document.getElementById('cfg-tg-enabled').checked,
+    telegram_bot_token: document.getElementById('cfg-tg-token').value,
+    telegram_chat_id: document.getElementById('cfg-tg-chat').value,
+    notify_started: document.getElementById('cfg-notify-started').checked,
+    notify_stopped: document.getElementById('cfg-notify-stopped').checked,
+    notify_added: document.getElementById('cfg-notify-added').checked,
+    notify_removed: document.getElementById('cfg-notify-removed').checked,
+  };
+  try {
+    await api('/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    toast('&#10003; Configuration saved', 'success');
+    closeConfig();
+    loadSummary();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+loadSummary(); loadSchedulerStatus();
+</script>
+</body>
+</html>

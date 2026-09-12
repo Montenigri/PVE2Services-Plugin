@@ -1,0 +1,12 @@
+id: pve2core
+name: PVE2 Core
+version: 1.0.0
+core_compat: ">=0.1.0,<2.0.0"
+description: Central connector for Proxmox data — populates and serves the machine cache.
+author: PVE2 Services Contributors
+icon: "⚙️"
+capabilities:
+  reads: [cluster_state]
+  writes: [machine_cache, sync_state]
+trust_tier: trusted
+license_required: false

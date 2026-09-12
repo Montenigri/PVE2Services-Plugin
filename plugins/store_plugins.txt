@@ -1,0 +1,14 @@
+# Plugins published to the PVE2 plugin store by the release workflow.
+#
+# The plugins listed in bundled_plugins.txt (PVE2Core, PVE2Dash, PVE2Audit,
+# PVE2DNS, PVE2Notify, PVE2NUT, PVE2Proxy, PVE2Power, PVE2Drift, pve2wiki,
+# example_plugin) ship *bundled* inside the core image and are NOT published
+# here: the core release pipeline checks out this repo and copies them in.
+#
+# Add future, independently-released plugins below (one directory name per
+# line). On a tag, tools/build_plugin.py builds, signs and publishes every
+# entry to the configured S3/MinIO store.
+#
+# Example:
+#   PVE2Backup
+#   PVE2Metrics

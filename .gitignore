@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[codz]
+*.egg-info/
+build/
+dist/
+.venv/
+env/
+venv/
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime state / secrets (never commit)
+*.db
+.pve2_secret
+.pve2_encryption_key
+.pve2_*.bak.*
+.auth_credentials
+logs/
+
+# Signing key (private) — lives in CI secrets or a secure local store
+*.pem
+!keys/*.pub
+
+# Editor
+.opencode/
+.vscode/
+.idea/

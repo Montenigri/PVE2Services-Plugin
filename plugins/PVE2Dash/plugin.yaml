@@ -1,0 +1,12 @@
+id: pve2dash
+name: PVE2 Dash
+version: 1.0.0
+core_compat: ">=0.1.0,<2.0.0"
+description: Lightweight read-only dashboard for Proxmox cluster health.
+author: PVE2 Services Contributors
+icon: "📊"
+capabilities:
+  reads: [cluster_state, machine_cache]
+  writes: []
+trust_tier: trusted
+license_required: false

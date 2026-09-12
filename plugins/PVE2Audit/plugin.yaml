@@ -1,0 +1,12 @@
+id: pve2audit
+name: PVE2 Audit
+version: 1.0.0
+core_compat: ">=0.1.0,<2.0.0"
+description: Resource analysis and rightsizing recommendations for the cluster.
+author: PVE2 Services Contributors
+icon: "🔍"
+capabilities:
+  reads: [cluster_state, machine_cache, audit_log]
+  writes: [audit_findings]
+trust_tier: trusted
+license_required: false

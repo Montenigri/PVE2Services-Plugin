@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE2 NUT — UPS Dashboard</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; padding:20px; }
+  .container { max-width:1200px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .header h1 { font-size:1.5em; color:#333; display:flex; align-items:center; gap:10px; }
+  .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+  .card .label { color:#666; font-size:0.8em; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; }
+  .card .value { font-size:1.8em; font-weight:700; color:#333; margin-top:2px; }
+  .card .sub { color:#999; font-size:0.85em; margin-top:4px; }
+  .toolbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar button { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .toolbar button:hover { opacity:0.85; }
+  .toolbar button:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-sync { background:#059669; color:white; }
+  .btn-config { background:#6b7280; color:white; }
+  .btn-start { background:#059669; color:white; }
+  .btn-stop { background:#dc2626; color:white; }
+  .badge { padding:2px 8px; border-radius:10px; font-size:0.78em; font-weight:600; display:inline-block; }
+  .badge.online { background:#d1fae5; color:#059669; }
+  .badge.on_battery { background:#fef3c7; color:#d97706; }
+  .badge.low_battery { background:#fee2e2; color:#dc2626; }
+  .badge.replace_battery, .badge.shutdown { background:#fee2e2; color:#dc2626; }
+  .badge.bypass, .badge.off, .badge.unknown { background:#e5e7eb; color:#6b7280; }
+  .badge.server { background:#e0e7ff; color:#3730a3; }
+  .badge.standby { background:#f3f4f6; color:#9ca3af; }
+  .ups-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px; margin-bottom:24px; }
+  .ups-card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-left:4px solid #e5e7eb; }
+  .ups-card.online { border-left-color:#059669; }
+  .ups-card.on_battery { border-left-color:#d97706; }
+  .ups-card.low_battery, .ups-card.shutdown, .ups-card.replace_battery { border-left-color:#dc2626; }
+  .ups-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:6px; }
+  .ups-name { font-weight:700; font-size:1.05em; color:#333; }
+  .ups-desc { color:#999; font-size:0.82em; margin-top:2px; }
+  .ups-servers { margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
+  .metric-row { display:grid; grid-template-columns:1fr 1fr; gap:10px 20px; margin-bottom:12px; }
+  .metric .m-label { color:#888; font-size:0.75em; text-transform:uppercase; font-weight:600; }
+  .metric .m-value { font-size:1.1em; font-weight:600; color:#333; }
+  .bar { background:#e5e7eb; border-radius:6px; height:10px; margin-top:4px; overflow:hidden; }
+  .bar > div { height:100%; border-radius:6px; transition:width 0.4s ease; }
+  .bar.battery > div.ok { background:#059669; }
+  .bar.battery > div.warn { background:#d97706; }
+  .bar.battery > div.crit { background:#dc2626; }
+  .bar.load > div.ok { background:#667eea; }
+  .bar.load > div.warn { background:#d97706; }
+  .bar.load > div.crit { background:#dc2626; }
+  .ups-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .ups-actions button { padding:6px 14px; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.85em; color:white; }
+  .ups-actions button:hover { opacity:0.85; }
+  .btn-charts { background:#667eea; }
+  .btn-cmds { background:#6b7280; }
+  .err-banner { background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; border-radius:8px; padding:10px 16px; margin-bottom:16px; font-size:0.9em; display:none; }
+  .events-table { width:100%; border-collapse:collapse; font-size:0.9em; }
+  .events-table th { text-align:left; padding:8px 12px; color:#666; font-size:0.78em; text-transform:uppercase; border-bottom:2px solid #e5e7eb; }
+  .events-table td { padding:8px 12px; border-bottom:1px solid #f3f4f6; color:#444; }
+  .events-table tr:last-child td { border-bottom:none; }
+  .ev-badge { padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:600; }
+  .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; }
+  .overlay.visible { display:flex; }
+  .modal { background:white; border-radius:12px; padding:28px; max-width:720px; width:92%; max-height:88vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.2); }
+  .modal h2 { font-size:1.2em; margin-bottom:18px; color:#333; }
+  .modal h3 { font-size:0.95em; margin:16px 0 8px 0; color:#444; }
+  .modal .form-group { margin-bottom:14px; }
+  .modal .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.85em; }
+  .modal .form-group input[type=text],.modal .form-group input[type=number],.modal .form-group input[type=password] { width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .modal .form-group input:focus { outline:none; border-color:#667eea; }
+  .modal .btn-row { display:flex; gap:10px; margin-top:18px; justify-content:flex-end; flex-wrap:wrap; }
+  .modal .btn-row button { padding:9px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  .modal .btn-row .btn-cancel { background:#e5e7eb; color:#333; }
+  .btn-save-config { background:#667eea; color:white; }
+  .btn-test { background:#d97706; color:white; }
+  .btn-add-server { background:#e0e7ff; color:#3730a3; padding:6px 14px !important; font-size:0.85em; }
+  .server-row { display:grid; grid-template-columns:1.2fr 1.4fr 0.6fr 1fr 1fr auto auto; gap:8px; align-items:end; margin-bottom:8px; background:#f9fafb; padding:10px; border-radius:8px; }
+  .server-row label { font-size:0.7em; color:#777; text-transform:uppercase; font-weight:600; display:block; margin-bottom:3px; }
+  .server-row input[type=text],.server-row input[type=password],.server-row input[type=number] { padding:7px 9px; border:1px solid #ddd; border-radius:6px; font-size:0.85em; width:100%; }
+  .server-row .rm { background:#fee2e2; color:#dc2626; border:none; border-radius:6px; padding:7px 10px; cursor:pointer; font-weight:700; }
+  .toggle-row { display:flex; gap:18px; flex-wrap:wrap; margin:10px 0; }
+  .toggle-row label { display:flex; align-items:center; gap:6px; font-size:0.88em; color:#444; font-weight:500; cursor:pointer; }
+  .toggle-row input { width:16px; height:16px; cursor:pointer; }
+  .cmd-list { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .cmd-item { display:flex; align-items:center; justify-content:space-between; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:10px 14px; }
+  .cmd-item code { font-family:ui-monospace,monospace; font-size:0.9em; color:#3730a3; }
+  .cmd-item button { background:#667eea; color:white; border:none; border-radius:6px; padding:6px 14px; cursor:pointer; font-weight:600; font-size:0.85em; }
+  .cmd-item button:hover { opacity:0.85; }
+  .client-chip { display:inline-block; background:#e5e7eb; color:#374151; border-radius:12px; padding:3px 10px; font-size:0.82em; margin:2px 4px 2px 0; font-family:ui-monospace,monospace; }
+  .chart-block { margin-bottom:20px; }
+  .chart-title { font-size:0.85em; font-weight:600; color:#555; margin-bottom:6px; }
+  .chart-empty { color:#999; font-size:0.85em; padding:20px; text-align:center; background:#f9fafb; border-radius:8px; }
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:8px; color:white; font-weight:500; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; opacity:0; transform:translateY(10px); transition:all 0.3s ease; pointer-events:none; max-width:420px; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#059669; }
+  .toast.error { background:#dc2626; }
+  .toast.info { background:#3730a3; }
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .empty-state { text-align:center; color:#999; padding:40px; }
+  .loading { text-align:center; color:#999; padding:40px; }
+  .section-title { font-weight:700; color:#333; font-size:1.05em; margin:24px 0 12px 0; }
+  @media(max-width:600px) { .summary-grid { grid-template-columns:1fr 1fr; } .metric-row { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <a href="/admin/hub" style="text-decoration:none;color:#667eea;font-weight:600;font-size:0.9em;white-space:nowrap;">&#8592; Hub</a>
+    <h1>PVE2 NUT <span style="font-size:0.6em;color:#999;font-weight:400;">UPS Dashboard</span></h1>
+    <div class="header-right">
+      <span style="color:#999;font-size:0.85em;" id="polled-label"></span>
+      <button class="btn-config" onclick="openConfig()">&#9881; Config</button>
+    </div>
+  </div>
+
+  <details class="info-note" style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 16px;margin:0 0 20px 0;font-size:0.88em;">
+<summary style="cursor:pointer;font-weight:600;color:#4338ca;user-select:none;">&#8505;&#65039; How the UPS dashboard works</summary>
+<div style="margin-top:10px;color:#444;line-height:1.6;">
+<p><strong>Multi-server:</strong> configure one or more NUT servers (upsd, default port 3493). Devices sharing the same UPS name across servers are merged into one logical UPS — the first reachable server (config order) serves the data, the others act as standby and are marked on the card.</p>
+<p><strong>History:</strong> the background poller saves a reading per UPS at every cycle; charts show battery charge, load and voltages over time. Old readings are pruned after the configured retention.</p>
+<p><strong>Events &amp; notifications:</strong> status transitions (on battery, low battery, back online) and communication loss are recorded and, if enabled in config, delivered through the channels configured in <strong>PVE2Notify</strong>.</p>
+<p><strong>Commands:</strong> instant commands (beeper, battery test, shutdown...) are sent via INSTCMD — a NUT user with command rights is usually required in the server config.</p>
+</div>
+</details>
+
+  <div class="summary-grid" id="summary"></div>
+
+  <div class="toolbar">
+    <button class="btn-sync" onclick="runSync()" id="sync-btn">&#8635; Poll Now</button>
+    <button class="btn-start" onclick="startScheduler()" id="sched-start-btn">&#9654; Start BG</button>
+    <button class="btn-stop" onclick="stopScheduler()" id="sched-stop-btn" style="display:none;">&#9632; Stop BG</button>
+    <span style="color:#999;font-size:0.85em;margin-left:8px;" id="sched-status"></span>
+  </div>
+
+  <div class="err-banner" id="err-banner"></div>
+
+  <div id="ups-container"><div class="loading">Loading UPS devices...</div></div>
+
+  <div class="section-title">&#128276; Recent events</div>
+  <div class="card" id="events-container"><div class="loading">Loading events...</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="config-overlay">
+  <div class="modal">
+    <h2>&#9881; NUT Configuration</h2>
+    <div id="config-form"></div>
+  </div>
+</div>
+
+<div class="overlay" id="charts-overlay">
+  <div class="modal" style="max-width:860px;">
+    <h2>&#128200; <span id="charts-ups-name"></span> — History</h2>
+    <div id="charts-content"></div>
+    <div class="btn-row"><button class="btn-cancel" onclick="closeModal('charts-overlay')">Close</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="cmds-overlay">
+  <div class="modal">
+    <h2>&#9889; <span id="cmds-ups-name"></span> — Commands</h2>
+    <div id="cmds-content"></div>
+    <div class="btn-row"><button class="btn-cancel" onclick="closeModal('cmds-overlay')">Close</button></div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api/plugins/pve2nut';
+
+async function api(path, opts) {
+  const r = await fetch(BASE + path, opts || {});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || e.error || r.statusText); }
+  return r.json();
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (type||'info') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function escapeHtml(s) { return (s===undefined||s===null?'':'').toString ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
+function fmtRuntime(seconds) {
+  if (seconds === undefined || seconds === null || isNaN(seconds)) return '&#8212;';
+  const s = Math.round(seconds);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+function fmtNum(v, suffix) { return (v === undefined || v === null || isNaN(v)) ? '&#8212;' : (Math.round(v*10)/10) + (suffix||''); }
+function parseTs(s) { return new Date(String(s).replace(' ', 'T') + (String(s).includes('Z') ? '' : 'Z')); }
+function relTime(d) {
+  if (!d) return '';
+  const diff = (Date.now() - new Date(d).getTime()) / 1000;
+  if (diff < 60) return Math.floor(Math.max(diff,0)) + 's ago';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+
+let devices = [];
+let polledAt = null;
+
+// ── Summary ──────────────────────────────────────────────────────────────
+function renderSummary() {
+  const online = devices.filter(d => d.state === 'online').length;
+  const onBattery = devices.filter(d => d.state === 'on_battery' || d.state === 'low_battery').length;
+  const offline = devices.filter(d => d.state === 'unknown' || d.state === 'off' || d.state === 'shutdown').length;
+  document.getElementById('summary').innerHTML =
+    '<div class="card"><div class="label">UPS Devices</div><div class="value">' + devices.length + '</div></div>' +
+    '<div class="card"><div class="label">Online</div><div class="value" style="color:#059669;">' + online + '</div></div>' +
+    '<div class="card"><div class="label">On Battery</div><div class="value" style="color:' + (onBattery ? '#d97706' : '#333') + ';">' + onBattery + '</div></div>' +
+    '<div class="card"><div class="label">Offline</div><div class="value" style="color:' + (offline ? '#dc2626' : '#333') + ';">' + offline + '</div></div>';
+  document.getElementById('polled-label').textContent = polledAt ? 'Polled ' + relTime(polledAt) : '';
+}
+
+// ── UPS cards ────────────────────────────────────────────────────────────
+function barHtml(pct, kind) {
+  const p = Math.max(0, Math.min(100, pct === undefined || pct === null || isNaN(pct) ? 0 : pct));
+  const cls = kind === 'battery' ? (p <= 20 ? 'crit' : p <= 50 ? 'warn' : 'ok')
+                                 : (p >= 90 ? 'crit' : p >= 70 ? 'warn' : 'ok');
+  return '<div class="bar ' + kind + '"><div class="' + cls + '" style="width:' + p + '%;"></div></div>';
+}
+
+function serverBadges(d) {
+  return (d.servers || []).map(s =>
+    '<span class="badge ' + (s === d.serving_server ? 'server' : 'standby') + '">' +
+    (s === d.serving_server ? '&#128190; ' : '&#127919; standby ') + escapeHtml(s) + '</span>'
+  ).join(' ');
+}
+
+function renderCard(d) {
+  const m = d.metrics || {};
+  return '<div class="ups-card ' + escapeHtml(d.state) + '">' +
+    '<div class="ups-header">' +
+      '<div><div class="ups-name">&#128267; ' + escapeHtml(d.name) + '</div>' +
+      (d.description ? '<div class="ups-desc">' + escapeHtml(d.description) + '</div>' : '') +
+      '<div class="ups-servers">' + serverBadges(d) + '</div></div>' +
+      '<span class="badge ' + escapeHtml(d.state) + '">' + escapeHtml(d.label || d.state) + (d.status ? ' (' + escapeHtml(d.status) + ')' : '') + '</span>' +
+    '</div>' +
+    '<div class="metric-row">' +
+      '<div class="metric"><div class="m-label">Battery</div><div class="m-value">' + fmtNum(m.battery_charge, '%') + '</div>' + barHtml(m.battery_charge, 'battery') + '</div>' +
+      '<div class="metric"><div class="m-label">Load</div><div class="m-value">' + fmtNum(m.ups_load, '%') + '</div>' + barHtml(m.ups_load, 'load') + '</div>' +
+    '</div>' +
+    '<div class="metric-row">' +
+      '<div class="metric"><div class="m-label">Runtime</div><div class="m-value">' + fmtRuntime(m.battery_runtime) + '</div></div>' +
+      '<div class="metric"><div class="m-label">Power</div><div class="m-value">' + fmtNum(m.realpower, ' W') + ' / ' + fmtNum(m.apparent_power, ' VA') + '</div></div>' +
+      '<div class="metric"><div class="m-label">Voltage In / Out</div><div class="m-value">' + fmtNum(m.input_voltage, ' V') + ' / ' + fmtNum(m.output_voltage, ' V') + '</div></div>' +
+      '<div class="metric"><div class="m-label">Battery Voltage</div><div class="m-value">' + fmtNum(m.battery_voltage, ' V') + '</div></div>' +
+    '</div>' +
+    '<div class="ups-actions">' +
+      '<button class="btn-charts" onclick="openCharts(\'' + encodeURIComponent(d.name) + '\')">&#128200; Charts</button>' +
+      '<button class="btn-cmds" onclick="openCommands(\'' + encodeURIComponent(d.name) + '\')">&#9889; Commands</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function loadDevices() {
+  try {
+    const data = await api('/devices');
+    if (data.error) {
+      document.getElementById('ups-container').innerHTML = '<div class="empty-state">' + escapeHtml(data.error) + ' &#8212; open &#9881; Config to add a NUT server</div>';
+      document.getElementById('summary').innerHTML = '';
+      return;
+    }
+    if (data.errors && data.errors.length) {
+      const b = document.getElementById('err-banner');
+      b.textContent = '&#9888; ' + data.errors.join(' | ');
+      b.innerHTML = '&#9888; ' + data.errors.map(escapeHtml).join(' | ');
+      b.style.display = 'block';
+    } else {
+      document.getElementById('err-banner').style.display = 'none';
+    }
+    devices = data.devices || [];
+    polledAt = data.polled_at ? new Date(data.polled_at * 1000) : null;
+    renderSummary();
+    const el = document.getElementById('ups-container');
+    if (!devices.length) { el.innerHTML = '<div class="empty-state">No UPS devices found &#8212; check the NUT servers in &#9881; Config</div>'; return; }
+    el.innerHTML = '<div class="ups-grid">' + devices.map(renderCard).join('') + '</div>';
+  } catch(e) {
+    document.getElementById('ups-container').innerHTML = '<div class="empty-state" style="color:#dc2626;">Error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function runSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Polling...';
+  try {
+    const result = await api('/sync', { method:'POST' });
+    if (result.error) { toast(result.error, 'error'); }
+    else {
+      const evts = (result.events || []).length;
+      toast('Polled ' + (result.devices || []).length + ' UPS' + ((result.devices||[]).length===1?'':'s') + (evts ? ' &#8212; ' + evts + ' event(s)' : ''), result.errors && result.errors.length ? 'error' : 'success');
+    }
+    await loadDevices(); loadEvents();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#8635; Poll Now';
+}
+
+// ── Events ───────────────────────────────────────────────────────────────
+const EV_LABELS = {
+  on_battery: ['On Battery', '#fef3c7', '#d97706'],
+  low_battery: ['Low Battery', '#fee2e2', '#dc2626'],
+  ups_online: ['Back Online', '#d1fae5', '#059669'],
+  comm_lost: ['Comm Lost', '#fee2e2', '#dc2626'],
+  comm_restored: ['Comm Restored', '#d1fae5', '#059669'],
+};
+
+async function loadEvents() {
+  try {
+    const data = await api('/events?limit=100');
+    const evts = data.events || [];
+    const el = document.getElementById('events-container');
+    if (!evts.length) { el.innerHTML = '<div class="empty-state">No events recorded yet</div>'; return; }
+    el.innerHTML = '<table class="events-table"><thead><tr><th>Time</th><th>UPS</th><th>Event</th><th>Transition</th><th>Detail</th></tr></thead><tbody>' +
+      evts.map(e => {
+        const lbl = EV_LABELS[e.event_type] || [e.event_type, '#e5e7eb', '#6b7280'];
+        const tr = e.from_status ? escapeHtml(e.from_status) + ' &rarr; ' + escapeHtml(e.to_status || '') : '&#8212;';
+        return '<tr><td style="white-space:nowrap;">' + (e.timestamp ? parseTs(e.timestamp).toLocaleString() : '') + '</td>' +
+          '<td><strong>' + escapeHtml(e.ups_name) + '</strong></td>' +
+          '<td><span class="ev-badge" style="background:' + lbl[1] + ';color:' + lbl[2] + ';">' + escapeHtml(lbl[0]) + '</span></td>' +
+          '<td>' + tr + '</td><td style="color:#777;">' + escapeHtml(e.detail || '') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  } catch(e) {
+    document.getElementById('events-container').innerHTML = '<div class="empty-state" style="color:#dc2626;">Error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+// ── Charts ───────────────────────────────────────────────────────────────
+function drawChart(series, unit, baselineZero) {
+  const pts = series.flatMap(s => s.points);
+  if (!pts.length) return '<div class="chart-empty">No data in the selected period</div>';
+  const W = 760, H = 190, ML = 46, MR = 12, MT = 10, MB = 22;
+  let vmin = Math.min(...pts.map(p => p.v)), vmax = Math.max(...pts.map(p => p.v));
+  if (baselineZero) vmin = Math.min(0, vmin);
+  if (vmin === vmax) { vmin -= 1; vmax += 1; }
+  const pad = (vmax - vmin) * 0.08; vmax += pad; if (!baselineZero) vmin -= pad;
+  const t0 = Math.min(...pts.map(p => p.t)), t1 = Math.max(...pts.map(p => p.t));
+  const span = Math.max(t1 - t0, 1);
+  const X = t => ML + (t - t0) / span * (W - ML - MR);
+  const Y = v => MT + (vmax - v) / (vmax - vmin) * (H - MT - MB);
+  let grid = '', labels = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = vmin + (vmax - vmin) * i / 4;
+    const y = Y(v);
+    grid += '<line x1="' + ML + '" y1="' + y + '" x2="' + (W - MR) + '" y2="' + y + '" stroke="#e5e7eb" stroke-width="1"/>';
+    labels += '<text x="' + (ML - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#999">' + Math.round(v * 10) / 10 + '</text>';
+  }
+  [t0, t0 + span/2, t1].forEach(t => {
+    labels += '<text x="' + X(t) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="#999">' + new Date(t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + '</text>';
+  });
+  let lines = '', dots = '';
+  series.forEach(s => {
+    if (s.points.length < 1) return;
+    const path = s.points.map((p, i) => (i ? 'L' : 'M') + X(p.t).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ');
+    lines += '<path d="' + path + '" fill="none" stroke="' + s.color + '" stroke-width="1.8"/>';
+    if (s.points.length <= 40) s.points.forEach(p => { dots += '<circle cx="' + X(p.t).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="2.2" fill="' + s.color + '"/>'; });
+  });
+  const legend = series.map(s => '<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:' + s.color + ';margin:0 5px 0 12px;"></span>' + escapeHtml(s.label)).join('');
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;background:#fafafa;border-radius:8px;">' + grid + lines + dots + labels + '</svg><div style="font-size:0.8em;color:#888;margin-top:4px;">' + legend + ' <span style="float:right;">' + unit + '</span></div>';
+}
+
+async function openCharts(upsEncoded) {
+  const ups = decodeURIComponent(upsEncoded);
+  document.getElementById('charts-ups-name').textContent = ups;
+  const content = document.getElementById('charts-content');
+  content.innerHTML = '<div class="loading">Loading history...</div>';
+  document.getElementById('charts-overlay').classList.add('visible');
+  try {
+    const data = await api('/history/' + upsEncoded + '?hours=24');
+    const readings = data.readings || [];
+    if (!readings.length) { content.innerHTML = '<div class="chart-empty">No history yet &#8212; the poller saves a reading per cycle</div>'; return; }
+    const pts = readings.map(r => ({ t: parseTs(r.timestamp).getTime(), r }));
+    const mk = (key) => pts.filter(p => p.r[key] !== null && p.r[key] !== undefined).map(p => ({ t: p.t, v: p.r[key] }));
+    content.innerHTML =
+      '<div class="chart-block"><div class="chart-title">Battery charge &amp; Load (last 24h)</div>' +
+      drawChart([{ label: 'Battery %', color: '#059669', points: mk('battery_charge') },
+                 { label: 'Load %', color: '#667eea', points: mk('ups_load') }], '%', true) + '</div>' +
+      '<div class="chart-block"><div class="chart-title">Voltage (last 24h)</div>' +
+      drawChart([{ label: 'Input V', color: '#d97706', points: mk('input_voltage') },
+                 { label: 'Output V', color: '#3730a3', points: mk('output_voltage') },
+                 { label: 'Battery V', color: '#059669', points: mk('battery_voltage') }], 'V', false) + '</div>' +
+      '<div class="chart-block"><div class="chart-title">Power (last 24h)</div>' +
+      drawChart([{ label: 'Real W', color: '#dc2626', points: mk('realpower') },
+                 { label: 'Apparent VA', color: '#6b7280', points: mk('apparent_power') }], 'W / VA', true) + '</div>';
+  } catch(e) { content.innerHTML = '<div class="chart-empty" style="color:#dc2626;">Error: ' + escapeHtml(e.message) + '</div>'; }
+}
+
+// ── Commands & clients ───────────────────────────────────────────────────
+async function openCommands(upsEncoded) {
+  const ups = decodeURIComponent(upsEncoded);
+  document.getElementById('cmds-ups-name').textContent = ups;
+  const content = document.getElementById('cmds-content');
+  content.innerHTML = '<div class="loading">Loading commands...</div>';
+  document.getElementById('cmds-overlay').classList.add('visible');
+  try {
+    const [cmds, clients] = await Promise.all([
+      api('/commands/' + upsEncoded),
+      api('/clients/' + upsEncoded),
+    ]);
+    let html = '';
+    if (clients.clients && clients.clients.length) {
+      html += '<h3>&#128100; Monitoring clients</h3><div>' + clients.clients.map(c => '<span class="client-chip">' + escapeHtml(c) + '</span>').join('') + '</div>';
+    }
+    if (cmds.error) html += '<div class="chart-empty" style="color:#dc2626;">' + escapeHtml(cmds.error) + '</div>';
+    if (!cmds.commands || !cmds.commands.length) {
+      html += '<div class="chart-empty">No commands available' + (cmds.error ? '' : ' for this UPS') + '</div>';
+    } else {
+      html += '<h3>&#9889; Instant commands (INSTCMD)</h3><div class="cmd-list">' +
+        cmds.commands.map(c => '<div class="cmd-item"><code>' + escapeHtml(c) + '</code>' +
+          '<button onclick="execCommand(\'' + upsEncoded + '\', \'' + encodeURIComponent(c) + '\')">Run</button></div>').join('') + '</div>';
+    }
+    content.innerHTML = html;
+  } catch(e) { content.innerHTML = '<div class="chart-empty" style="color:#dc2626;">Error: ' + escapeHtml(e.message) + '</div>'; }
+}
+
+async function execCommand(upsEncoded, cmdEncoded) {
+  const ups = decodeURIComponent(upsEncoded), cmd = decodeURIComponent(cmdEncoded);
+  if (!confirm('Execute "' + cmd + '" on UPS "' + ups + '"?')) return;
+  try {
+    const r = await api('/command/' + upsEncoded + '/' + cmdEncoded, { method:'POST' });
+    if (r.executed) toast('&#10003; ' + cmd + ' executed on ' + ups, 'success');
+    else toast('Command failed: ' + (r.error || 'unknown error'), 'error');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── Scheduler ────────────────────────────────────────────────────────────
+async function loadSchedulerStatus() {
+  try {
+    const st = await api('/scheduler/status');
+    document.getElementById('sched-start-btn').style.display = st.running ? 'none' : '';
+    document.getElementById('sched-stop-btn').style.display = st.running ? '' : 'none';
+    const nextRun = st.job ? st.job.next_run : null;
+    document.getElementById('sched-status').textContent = st.running ? 'Background: ON' + (nextRun ? ' (next: ' + new Date(nextRun).toLocaleTimeString() + ')' : '') : 'Background: OFF';
+  } catch(e) {}
+}
+
+async function startScheduler() {
+  const btn = document.getElementById('sched-start-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('/scheduler/start', { method:'POST' });
+    toast(r.started ? 'Background poll started (every ' + r.interval_seconds + 's)' : 'Already running', r.started ? 'success' : 'info');
+    loadSchedulerStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9654; Start BG';
+}
+
+async function stopScheduler() {
+  const btn = document.getElementById('sched-stop-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('/scheduler/stop', { method:'POST' });
+    toast(r.stopped ? 'Background poll stopped' : 'Not running', 'info');
+    loadSchedulerStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '&#9632; Stop BG';
+}
+
+// ── Config ───────────────────────────────────────────────────────────────
+let cfgServers = [];
+
+function serverRowHtml(s, i) {
+  return '<div class="server-row">' +
+    '<div><label>Label</label><input type="text" value="' + escapeHtml(s.label) + '" oninput="updServer(' + i + ',\'label\',this.value)" placeholder="nut-main"></div>' +
+    '<div><label>Host</label><input type="text" value="' + escapeHtml(s.host) + '" oninput="updServer(' + i + ',\'host\',this.value)" placeholder="192.168.1.10"></div>' +
+    '<div><label>Port</label><input type="number" value="' + (s.port || 3493) + '" oninput="updServer(' + i + ',\'port\',parseInt(this.value)||3493)"></div>' +
+    '<div><label>User (optional)</label><input type="text" value="' + escapeHtml(s.username) + '" oninput="updServer(' + i + ',\'username\',this.value)" autocomplete="off"></div>' +
+    '<div><label>Password</label><input type="password" value="' + escapeHtml(s.password) + '" oninput="updServer(' + i + ',\'password\',this.value)" autocomplete="new-password"></div>' +
+    '<div><label>On</label><input type="checkbox" ' + (s.enabled !== false ? 'checked' : '') + ' onchange="updServer(' + i + ',\'enabled\',this.checked)" style="width:16px;height:16px;cursor:pointer;"></div>' +
+    '<button class="rm" onclick="rmServer(' + i + ')">&times;</button>' +
+  '</div>';
+}
+
+function renderServers() {
+  const c = document.getElementById('servers-list');
+  c.innerHTML = cfgServers.map(serverRowHtml).join('') ||
+    '<div class="chart-empty">No NUT servers configured &#8212; add one</div>';
+}
+function updServer(i, key, value) { if (cfgServers[i]) cfgServers[i][key] = value; }
+function rmServer(i) { cfgServers.splice(i, 1); renderServers(); }
+function addServer() { cfgServers.push({ label:'', host:'', port:3493, username:'', password:'', enabled:true }); renderServers(); }
+
+async function openConfig() {
+  document.getElementById('config-overlay').classList.add('visible');
+  const form = document.getElementById('config-form');
+  form.innerHTML = '<div class="loading">Loading config...</div>';
+  try {
+    const data = await api('/config');
+    const c = data.config || {};
+    cfgServers = (c.servers || []).map(s => ({ label:s.label||'', host:s.host||'', port:s.port||3493, username:s.username||'', password:s.password||'', enabled:s.enabled !== false }));
+    form.innerHTML =
+      '<div class="toggle-row"><label><input type="checkbox" id="cfg-enabled" ' + (c.enabled ? 'checked' : '') + '> Enabled</label></div>' +
+      '<h3 style="margin-top:6px;">NUT servers <button class="btn-add-server" style="border:none;border-radius:6px;cursor:pointer;font-weight:600;margin-left:8px;" onclick="addServer()">+ Add server</button></h3>' +
+      '<div id="servers-list"></div>' +
+      '<h3>Polling &amp; retention</h3>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
+        '<div class="form-group"><label>Poll interval (seconds)</label><input type="number" id="cfg-interval" value="' + (c.poll_interval_seconds || 60) + '" min="15" max="3600"></div>' +
+        '<div class="form-group"><label>History retention (days)</label><input type="number" id="cfg-prune" value="' + (c.prune_days || 30) + '" min="1" max="3650"></div>' +
+      '</div>' +
+      '<h3>Notifications (via PVE2Notify)</h3>' +
+      '<div class="toggle-row">' +
+        '<label><input type="checkbox" id="cfg-n-ob" ' + (c.notify_on_battery !== false ? 'checked' : '') + '> On battery</label>' +
+        '<label><input type="checkbox" id="cfg-n-lb" ' + (c.notify_low_battery !== false ? 'checked' : '') + '> Low battery</label>' +
+        '<label><input type="checkbox" id="cfg-n-ol" ' + (c.notify_ups_online ? 'checked' : '') + '> Back online</label>' +
+        '<label><input type="checkbox" id="cfg-n-cl" ' + (c.notify_comm_lost !== false ? 'checked' : '') + '> Comm lost</label>' +
+        '<label><input type="checkbox" id="cfg-n-cr" ' + (c.notify_comm_restored ? 'checked' : '') + '> Comm restored</label>' +
+      '</div>' +
+      '<div id="test-results"></div>' +
+      '<div class="btn-row">' +
+        '<button class="btn-cancel" onclick="closeModal(\'config-overlay\')">Cancel</button>' +
+        '<button class="btn-test" onclick="testConfig()">&#128269; Test</button>' +
+        '<button class="btn-save-config" onclick="saveConfig()">&#10003; Save Config</button>' +
+      '</div>';
+    renderServers();
+  } catch(e) { form.innerHTML = '<div style="color:#dc2626;">Error: ' + escapeHtml(e.message) + '</div>'; }
+}
+
+async function testConfig() {
+  const el = document.getElementById('test-results');
+  el.innerHTML = '<div class="loading">Testing NUT servers...</div>';
+  try {
+    const r = await api('/test', { method:'POST' });
+    if (r.error) { el.innerHTML = '<div class="chart-empty" style="color:#dc2626;">' + escapeHtml(r.error) + '</div>'; return; }
+    el.innerHTML = '<div class="chart-empty" style="text-align:left;">' + (r.results || []).map(s =>
+      '<div>' + (s.ok ? '&#9989;' : '&#10060;') + ' <strong>' + escapeHtml(s.label) + '</strong> &#8212; ' +
+      (s.ok ? s.ups_count + ' UPS device(s)' : escapeHtml(s.error)) + '</div>').join('') +
+      (r.devices_found !== undefined ? '<div style="margin-top:6px;">Total devices: <strong>' + r.devices_found + '</strong></div>' : '') + '</div>';
+  } catch(e) { el.innerHTML = '<div class="chart-empty" style="color:#dc2626;">Error: ' + escapeHtml(e.message) + '</div>'; }
+}
+
+async function saveConfig() {
+  const servers = cfgServers.filter(s => (s.host || '').trim());
+  const body = {
+    enabled: document.getElementById('cfg-enabled').checked,
+    servers: servers,
+    poll_interval_seconds: parseInt(document.getElementById('cfg-interval').value) || 60,
+    prune_days: parseInt(document.getElementById('cfg-prune').value) || 30,
+    notify_on_battery: document.getElementById('cfg-n-ob').checked,
+    notify_low_battery: document.getElementById('cfg-n-lb').checked,
+    notify_ups_online: document.getElementById('cfg-n-ol').checked,
+    notify_comm_lost: document.getElementById('cfg-n-cl').checked,
+    notify_comm_restored: document.getElementById('cfg-n-cr').checked,
+  };
+  try {
+    await api('/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    toast('&#10003; Configuration saved', 'success');
+    closeModal('config-overlay');
+    loadDevices(); loadEvents();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+loadDevices(); loadEvents(); loadSchedulerStatus();
+setInterval(() => { loadDevices(); }, 30000);
+</script>
+</body>
+</html>

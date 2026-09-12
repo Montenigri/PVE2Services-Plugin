@@ -1,0 +1,12 @@
+id: example_plugin
+name: Example Plugin
+version: 1.0.0
+core_compat: ">=0.1.0,<2.0.0"
+description: Demo plugin showing how to build PVE2Services plugins.
+author: PVE2 Services Contributors
+icon: "🧩"
+capabilities:
+  reads: []
+  writes: []
+trust_tier: trusted
+license_required: false

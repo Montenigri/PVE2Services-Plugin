@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE2 Wiki — Wiki.js Documentation Sync</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; padding:20px; }
+  .container { max-width:1200px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .header h1 { font-size:1.5em; color:#333; display:flex; align-items:center; gap:10px; }
+  .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .card .label { color:#666; font-size:0.8em; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; }
+  .card .value { font-size:1.8em; font-weight:700; color:#333; margin-top:2px; }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+  .badge { padding:2px 8px; border-radius:10px; font-size:0.78em; font-weight:600; display:inline-block; }
+  .badge.synced { background:#d1fae5; color:#059669; }
+  .badge.pending { background:#fef3c7; color:#d97706; }
+  .badge.error { background:#fee2e2; color:#dc2626; }
+  .badge.vm { background:#e0e7ff; color:#3730a3; }
+  .badge.lxc { background:#fef3c7; color:#d97706; }
+  .badge.node { background:#dbeafe; color:#1d4ed8; }
+  .badge.storage { background:#ede9fe; color:#6d28d9; }
+  .badge.disk { background:#fee2e2; color:#b91c1c; }
+  .badge.cluster { background:#ccfbf1; color:#0f766e; }
+  .badge.ceph { background:#cffafe; color:#155e75; }
+  .badge.created { background:#d1fae5; color:#059669; }
+  .badge.updated { background:#fef3c7; color:#d97706; }
+  .badge.deleted { background:#fee2e2; color:#dc2626; }
+  .history-table { width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1); font-size:0.88em; }
+  .history-table th { text-align:left; padding:10px 14px; background:#f8fafc; color:#666; font-size:0.85em; text-transform:uppercase; letter-spacing:0.03em; border-bottom:2px solid #eee; }
+  .history-table td { padding:8px 14px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  .history-table tr:hover td { background:#f9fafb; }
+  .history-section-title { font-weight:700; color:#333; margin:22px 0 10px; font-size:1em; }
+  .filters { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .filters select,.filters input { padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .toolbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar button { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .toolbar button:hover { opacity:0.85; }
+  .toolbar button:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-sync { background:#059669; color:white; }
+  .btn-config { background:#6b7280; color:white; }
+  .loading { text-align:center; color:#999; padding:40px; }
+  .empty-state { text-align:center; color:#999; padding:40px; }
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:8px; color:white; font-weight:500; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; opacity:0; transform:translateY(10px); transition:all 0.3s ease; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#059669; }
+  .toast.error { background:#dc2626; }
+  .toast.info { background:#3730a3; }
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; }
+  .overlay.visible { display:flex; }
+  .modal { background:white; border-radius:12px; padding:32px; max-width:640px; width:90%; max-height:85vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.2); }
+  .modal h2 { font-size:1.2em; margin-bottom:20px; color:#333; }
+  .modal h3 { font-size:1em; margin:16px 0 8px; color:#555; }
+  .modal .form-group { margin-bottom:14px; }
+  .modal .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.9em; }
+  .modal .form-group input[type=text],.modal .form-group input[type=password],.modal .form-group input[type=number] { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .modal .form-group input:focus { outline:none; border-color:#667eea; }
+  .modal .form-group .hint { color:#999; font-size:0.8em; margin-top:2px; }
+  .modal .btn-row { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; flex-wrap:wrap; }
+  .modal .btn-row button { padding:9px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  .modal .btn-row .btn-cancel { background:#e5e7eb; color:#333; }
+  .modal .btn-save-config { background:#667eea; color:white; }
+  .tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid #e5e7eb; }
+  .tabs button { padding:10px 20px; border:none; background:none; cursor:pointer; font-weight:600; color:#999; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.15s; }
+  .tabs button.active { color:#667eea; border-bottom-color:#667eea; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  .template-editor { width:100%; min-height:250px; padding:12px; border:1px solid #ddd; border-radius:6px; font-family:'Fira Code','Cascadia Code',monospace; font-size:0.85em; resize:vertical; }
+  .entity-list { background:white; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .entity-item { display:flex; align-items:center; padding:10px 16px; border-bottom:1px solid #eee; font-size:0.9em; gap:12px; }
+  .entity-item:hover { background:#f9fafb; }
+  .entity-item .name { flex:1; font-weight:600; }
+  .entity-item .path { flex:2; color:#666; font-family:monospace; font-size:0.85em; }
+  .sync-log { background:#1e1e2e; color:#cdd6f4; padding:12px; border-radius:8px; font-family:'Fira Code',monospace; font-size:0.82em; overflow:auto; max-height:300px; white-space:pre-wrap; }
+  .synced-icon { color:#059669; }
+  .pending-icon { color:#d97706; }
+  .error-icon { color:#dc2626; }
+  @media(max-width:600px) { .summary-grid { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <a href="/admin/hub" style="text-decoration:none;color:#667eea;font-weight:600;font-size:0.9em;white-space:nowrap;">&#8592; Hub</a>
+    <h1>PVE2 Wiki <span style="font-size:0.6em;color:#999;font-weight:400;">Wiki.js Documentation Sync</span></h1>
+    <div class="header-right">
+      <span style="color:#999;font-size:0.85em;" id="wiki-label"></span>
+      <button class="btn-config" onclick="openConfig()">&#9881; Config</button>
+    </div>
+  </div>
+
+  <details class="info-note" style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 16px;margin:0 0 20px 0;font-size:0.88em;">
+<summary style="cursor:pointer;font-weight:600;color:#4338ca;user-select:none;">&#8505;&#65039; How the wiki sync works &amp; why</summary>
+<div style="margin-top:10px;color:#444;line-height:1.6;"><p><strong>How it works:</strong> a documentation page is rendered per machine/node/storage from editable templates and pushed to Wiki.js via its GraphQL API, organized under the base path (e.g. <code>infrastructure/proxmox/vm/115</code>).</p><p><strong>Why:</strong> infrastructure documentation that maintains itself — names, specs, IPs and status stay current without anyone editing pages.</p><p><strong>Idempotent:</strong> every page is tracked by a content hash. Re-running sync never rewrites unchanged pages; changed machines are updated in place. Templates are Jinja2 (<code>{{ name }}</code>, loops, filters) — the full tag reference is at the top of the Templates tab.</p></div>
+</details>
+
+<div class="summary-grid" id="summary"></div>
+
+  <div class="toolbar">
+    <button class="btn-sync" onclick="triggerSync()" id="sync-btn">&#8635; Sync Now</button>
+    <span style="color:#999;font-size:0.85em;margin-left:8px;" id="sync-status"></span>
+  </div>
+
+  <div class="tabs">
+    <button class="active" onclick="switchTab('entities',this)">&#128196; Entities</button>
+    <button onclick="switchTab('templates',this)">&#128221; Templates</button>
+    <button onclick="switchTab('pages',this)">&#128218; Published Pages</button>
+    <button onclick="switchTab('history',this)">&#128345; History</button>
+  </div>
+
+  <div id="tab-entities" class="tab-content active">
+    <div class="filters">
+      <input type="text" id="filter-search" placeholder="Search..." oninput="filterEntities()">
+      <select id="filter-type" onchange="filterEntities()">
+        <option value="">All types</option>
+        <option value="vm">VM</option>
+        <option value="lxc">LXC</option>
+        <option value="node">Node</option>
+        <option value="storage">Storage</option>
+        <option value="disk">Disk</option>
+        <option value="cluster">Cluster</option>
+        <option value="ceph">Ceph</option>
+      </select>
+      <span id="entity-count" style="color:#999;font-size:0.85em;"></span>
+    </div>
+    <div id="entity-list"><div class="loading">Loading entities...</div></div>
+  </div>
+
+  <div id="tab-templates" class="tab-content">
+    <div id="template-list"><div class="loading">Loading templates...</div></div>
+  </div>
+
+  <div id="tab-pages" class="tab-content">
+    <div id="pages-list"><div class="loading">Loading published pages...</div></div>
+  </div>
+
+  <div id="tab-history" class="tab-content">
+    <div id="history-list"><div class="loading">Loading history...</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="config-overlay">
+  <div class="modal">
+    <h2>&#9881; Wiki.js Configuration</h2>
+    <div id="config-form"></div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api/plugins/pve2wiki';
+let entities = [];
+let templates = {};
+
+async function api(path, opts) {
+  const r = await fetch(BASE + path, opts || {});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || e.error || r.statusText); }
+  return r.json();
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (type||'info') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'templates') loadTemplates();
+  if (name === 'pages') loadPages();
+  if (name === 'history') loadHistory();
+}
+
+async function loadSummary() {
+  try {
+    const cfg = await api('/config');
+    const c = cfg.config || {};
+    document.getElementById('wiki-label').textContent = c.wiki_url ? (c.wiki_url.split('/')[2] || c.wiki_url) : 'not configured';
+    const statusData = await api('/status');
+    const pagesCount = statusData.total_pages || 0;
+    const lastSync = statusData.last_sync || null;
+    const lastStatus = statusData.last_status || 'pending';
+    const entitiesData = await api('/entities');
+    const totalEnt = entitiesData.total || 0;
+    document.getElementById('summary').innerHTML =
+      '<div class="card"><div class="label">Entities</div><div class="value">' + totalEnt + '</div></div>' +
+      '<div class="card"><div class="label">Published</div><div class="value">' + pagesCount + '</div></div>' +
+      '<div class="card"><div class="label">Last Sync</div><div class="value" style="font-size:1em;">' + (lastSync ? new Date(lastSync).toLocaleString() : '\u2014') + '</div><div><span class="badge ' + lastStatus + '">' + lastStatus + '</span></div></div>';
+  } catch(e) {}
+}
+
+async function loadEntities() {
+  try {
+    const data = await api('/entities');
+    entities = data.entities || [];
+    document.getElementById('entity-count').textContent = entities.length + ' entities';
+    renderEntities();
+  } catch(e) {
+    document.getElementById('entity-list').innerHTML = '<div class="empty-state" style="color:#dc2626;">Error: ' + e.message + '</div>';
+  }
+}
+
+function renderEntities() {
+  const el = document.getElementById('entity-list');
+  if (!entities.length) { el.innerHTML = '<div class="empty-state">No entities found — run PVE2Core sync first</div>'; return; }
+  const icons = { vm:'[VM]', lxc:'[CT]', node:'[N]', storage:'[S]', disk:'[D]', cluster:'[C]', ceph:'[CE]' };
+  el.innerHTML = entities.map(e => {
+    const icon = icons[e.entity_type] || '[?]';
+    const statusIcon = e.last_synced ? '<span class="synced-icon">\u2713</span>' : '<span class="pending-icon">\u25CB</span>';
+    const badgeClass = ['vm','lxc','node','storage','disk','cluster','ceph'].includes(e.entity_type) ? e.entity_type : 'storage';
+    return '<div class="entity-item">' +
+      '<span>' + statusIcon + '</span>' +
+      '<span class="badge ' + badgeClass + '">' + icon + ' ' + e.entity_type.toUpperCase() + '</span>' +
+      '<span class="name">' + escapeHtml(e.name || '#' + e.entity_id) + '</span>' +
+      '<span style="color:#999;font-size:0.85em;">' + e.node + '</span>' +
+      '<span class="path">' + escapeHtml(e.wiki_path) + '</span>' +
+      '<span style="color:#999;font-size:0.8em;white-space:nowrap;">' + (e.last_synced ? relTime(e.last_synced) + ' ago' : 'pending') + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function filterEntities() {
+  const q = document.getElementById('filter-search').value.toLowerCase();
+  const tp = document.getElementById('filter-type').value;
+  const items = document.querySelectorAll('#entity-list .entity-item');
+  items.forEach(item => {
+    const text = item.textContent.toLowerCase();
+    const match = !q || text.includes(q);
+    const typeMatch = !tp || text.includes(tp.toLowerCase());
+    item.style.display = (match && typeMatch) ? '' : 'none';
+  });
+}
+
+async function loadTemplates() {
+  const el = document.getElementById('template-list');
+  el.innerHTML = '<div class="loading">Loading templates...</div>';
+  try {
+    const data = await api('/templates');
+    templates = data.templates || {};
+    const vars = data.variables || {};
+    const filters = data.filters || [];
+
+    // --- Reference panel: available tags per template type ---
+    let ref = '<details class="info-note" style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 16px;margin:0 0 16px 0;font-size:0.88em;">' +
+      '<summary style="cursor:pointer;font-weight:600;color:#4338ca;user-select:none;">&#8505;&#65039; Available tags &amp; syntax (click to expand)</summary>' +
+      '<div style="margin-top:10px;color:#444;line-height:1.6;">' +
+      '<p><strong>Syntax (Jinja2):</strong> <code>{{ name }}</code> prints a variable &middot; <code>{% for ip in ip_addresses %}...{% endfor %}</code> loops a list ' +
+      '&middot; <code>{{ memory_mb | format_mb }}</code> applies a filter &middot; filters: ' +
+      filters.map(f => '<code>' + escapeHtml(f.name) + '</code> — ' + escapeHtml(f.description)).join(' &middot; ') + '</p>';
+    for (const [type, info] of Object.entries(vars)) {
+      ref += '<div style="margin-bottom:10px;"><strong>' + escapeHtml(info.label) + '</strong><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' +
+        info.variables.map(v => '<span title="' + escapeHtml(v.description) + '" style="background:#e0e7ff;color:#3730a3;border-radius:10px;padding:2px 10px;font-family:monospace;font-size:0.9em;cursor:help;">{{ ' + escapeHtml(v.name) + ' }}</span>').join('') +
+        '</div></div>';
+    }
+    ref += '<p style="color:#999;font-size:0.9em;">Hover a tag to see what it contains. Loops need <code>{% for x in list %}</code> around the repeated block.</p>';
+    ref += '</div></details>';
+
+    let html = ref +
+      '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
+      '<button class="btn-sync" onclick="resetTemplates()" style="background:#6b7280;font-size:0.85em;">&#8635; Reset to Defaults</button>' +
+      '<span style="color:#999;font-size:0.85em;">Templates use Jinja2 — see the tag reference above.</span></div>';
+    for (const [type, tpl] of Object.entries(templates)) {
+      html += '<div style="margin-bottom:16px;background:white;border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<strong style="font-size:1em;">' + escapeHtml(tpl.label || type) + '</strong>' +
+        '<button class="btn-save-config" onclick="saveTemplate(\'' + type + '\')" id="tpl-btn-' + type + '" style="padding:6px 14px;font-size:0.85em;">Save</button>' +
+        '</div>' +
+        '<textarea class="template-editor" id="tpl-' + type + '">' + escapeHtml(tpl.content) + '</textarea></div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div style="color:#dc2626;">Error: ' + e.message + '</div>';
+  }
+}
+
+async function saveTemplate(type) {
+  const btn = document.getElementById('tpl-btn-' + type);
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const content = document.getElementById('tpl-' + type).value;
+  try {
+    await api('/templates/' + type, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type, content }) });
+    toast('\u2713 ' + type + ' template saved', 'success');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Save';
+}
+
+async function resetTemplates() {
+  if (!confirm('Reset all templates to defaults?')) return;
+  try {
+    await api('/templates/reset', { method:'POST' });
+    toast('\u2713 Templates reset to defaults', 'success');
+    loadTemplates();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function loadPages() {
+  const el = document.getElementById('pages-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const data = await api('/pages');
+    const pages = data.pages || [];
+    if (!pages.length) { el.innerHTML = '<div class="empty-state">No pages published yet — run Sync Now</div>'; return; }
+    el.innerHTML = pages.map(p => {
+      const ago = p.last_synced ? relTime(p.last_synced) + ' ago' : 'pending';
+      return '<div class="entity-item">' +
+        '<span class="synced-icon">\u2713</span>' +
+        '<span class="badge ' + p.entity_type + '">' + p.entity_type.toUpperCase() + '</span>' +
+        '<span class="name">' + escapeHtml(p.title) + '</span>' +
+        '<span class="path">' + escapeHtml(p.wiki_path) + '</span>' +
+        '<span style="color:#999;font-size:0.8em;white-space:nowrap;">' + ago + '</span>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="color:#dc2626;">Error: ' + e.message + '</div>';
+  }
+}
+
+async function loadHistory() {
+  const el = document.getElementById('history-list');
+  el.innerHTML = '<div class="loading">Loading history...</div>';
+  try {
+    const [chg, stg, hlh] = await Promise.all([
+      fetch('/db/changelog?limit=100').then(r => r.json()),
+      fetch('/db/storage_history?limit=30').then(r => r.json()),
+      fetch('/db/health_history?limit=50').then(r => r.json()),
+    ]);
+    let html = '';
+
+    html += '<div class="history-section-title">Changelog (last 100 events)</div>';
+    if (chg && chg.length) {
+      html += '<table class="history-table"><thead><tr><th>Date</th><th>Action</th><th>Type</th><th>Name</th><th>Details</th></tr></thead><tbody>' +
+        chg.map(e => '<tr>' +
+          '<td style="white-space:nowrap;">' + escapeHtml((e.timestamp||'').replace('T',' ').slice(0,19)) + '</td>' +
+          '<td><span class="badge ' + escapeHtml(e.action) + '">' + escapeHtml(e.action) + '</span></td>' +
+          '<td>' + escapeHtml(e.entity_type) + '</td>' +
+          '<td><strong>' + escapeHtml(e.entity_name || e.entity_id) + '</strong></td>' +
+          '<td style="color:#666;">' + escapeHtml(e.details) + '</td>' +
+          '</tr>').join('') + '</tbody></table>';
+    } else {
+      html += '<div class="empty-state">No changelog yet — run Sync Now</div>';
+    }
+
+    html += '<div class="history-section-title">Storage usage history (latest 30 samples)</div>';
+    if (stg && stg.length) {
+      html += '<table class="history-table"><thead><tr><th>When</th><th>Node</th><th>Storage</th><th>Total</th><th>Used</th><th>Content</th></tr></thead><tbody>' +
+        stg.map(s => '<tr>' +
+          '<td style="white-space:nowrap;">' + escapeHtml((s.timestamp||'').replace('T',' ').slice(0,19)) + '</td>' +
+          '<td>' + escapeHtml(s.node) + '</td>' +
+          '<td><strong>' + escapeHtml(s.storage_name) + '</strong></td>' +
+          '<td>' + fmtBytes(s.total_bytes) + '</td>' +
+          '<td>' + fmtBytes(s.used_bytes) + '</td>' +
+          '<td style="color:#666;">' + escapeHtml(s.content_types) + '</td>' +
+          '</tr>').join('') + '</tbody></table>';
+    } else {
+      html += '<div class="empty-state">No storage history yet — recorded on every sync</div>';
+    }
+
+    html += '<div class="history-section-title">Health history (disks SMART, Ceph)</div>';
+    if (hlh && hlh.length) {
+      html += '<table class="history-table"><thead><tr><th>When</th><th>Component</th><th>Item</th><th>Status</th><th>Details</th></tr></thead><tbody>' +
+        hlh.map(h => '<tr>' +
+          '<td style="white-space:nowrap;">' + escapeHtml((h.timestamp||'').replace('T',' ').slice(0,19)) + '</td>' +
+          '<td>' + escapeHtml(h.component) + '</td>' +
+          '<td><strong>' + escapeHtml(h.item_id) + '</strong></td>' +
+          '<td><span class="badge ' + ((h.status||'').includes('OK') || (h.status||'').includes('PASSED') ? 'created' : 'error') + '">' + escapeHtml(h.status) + '</span></td>' +
+          '<td style="color:#666;font-family:monospace;font-size:0.9em;">' + escapeHtml(h.details) + '</td>' +
+          '</tr>').join('') + '</tbody></table>';
+    } else {
+      html += '<div class="empty-state">No health history yet — enable disks/Ceph in Config and run Sync</div>';
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div style="color:#dc2626;">Error: ' + e.message + '</div>';
+  }
+}
+
+function fmtBytes(b) {
+  if (!b) return '\u2014';
+  const units = ['B','KB','MB','GB','TB'];
+  let i = 0, s = b;
+  while (s >= 1024 && i < units.length-1) { s /= 1024; i++; }
+  return s.toFixed(i ? 1 : 0) + ' ' + units[i];
+}
+
+async function triggerSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Syncing...';
+  document.getElementById('sync-status').textContent = '';
+  try {
+    const result = await api('/sync', { method:'POST' });
+    if (result.status === 'success') {
+      toast('\u2713 Created ' + result.created + ', updated ' + result.updated + ', archived ' + (result.archived||0) + (result.errors.length ? '. Errors: ' + result.errors.join(', ') : ''), 'success');
+      loadSummary();
+      loadEntities();
+    } else {
+      toast('Sync error: ' + (result.errors||['unknown']).join(', '), 'error');
+    }
+  } catch(e) { toast('Sync failed: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '\u21bb Sync Now';
+}
+
+async function openConfig() {
+  const overlay = document.getElementById('config-overlay');
+  overlay.classList.add('visible');
+  const form = document.getElementById('config-form');
+  form.innerHTML = '<div class="loading">Loading config...</div>';
+  try {
+    const data = await api('/config');
+    const c = data.config || {};
+    form.innerHTML =
+      '<div class="form-group"><label>Wiki.js URL</label><input type="text" id="cfg-url" value="' + escapeHtml(c.wiki_url||'') + '" placeholder="https://wiki.example.com"><div class="hint">GraphQL endpoint auto-appended if missing</div></div>' +
+      '<div class="form-group"><label>Personal Access Token</label><input type="password" id="cfg-token" value="' + escapeHtml(c.wiki_token||'') + '" placeholder="From Wiki.js admin / API tokens"></div>' +
+      '<div class="form-group"><label>Base path</label><input type="text" id="cfg-path" value="' + escapeHtml(c.base_path||'/infrastructure/proxmox') + '" placeholder="/infrastructure/proxmox"><div class="hint">Pages created at: {base_path}/{type}/{id}</div></div>' +
+      '<div class="form-group"><label>Locale</label><input type="text" id="cfg-locale" value="' + escapeHtml(c.locale||'en') + '" placeholder="en" style="width:80px;"></div>' +
+      '<h3 style="font-size:0.95em;color:#555;margin:18px 0 6px;">Extra entity pages (off = fewer pages, still tracked in history)</h3>' +
+      '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-weight:500;"><input type="checkbox" id="cfg-disks"' + (c.include_disks?' checked':'') + '> Physical disks (one page per disk)</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:500;"><input type="checkbox" id="cfg-cluster"' + (c.include_cluster?' checked':'') + '> Cluster status summary page</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:500;"><input type="checkbox" id="cfg-ceph"' + (c.include_ceph?' checked':'') + '> Ceph health page</label></div>' +
+      '<h3 style="font-size:0.95em;color:#555;margin:18px 0 6px;">Orphaned pages</h3>' +
+      '<div class="form-group"><label>When a wiki page no longer exists on Wiki.js</label>' +
+      '<select id="cfg-orphan" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9em;">' +
+        '<option value="recreate"' + (c.wiki_orphan_handling !== 'ignore' ? ' selected' : '') + '>Recreate the page</option>' +
+        '<option value="ignore"' + (c.wiki_orphan_handling === 'ignore' ? ' selected' : '') + '>Ignore (skip update)</option>' +
+      '</select></div>' +
+      '<div class="btn-row">' +
+        '<button class="btn-cancel" onclick="closeConfig()">Cancel</button>' +
+        '<button class="btn-save-config" onclick="saveConfig()">\u2713 Save Config</button>' +
+      '</div>';
+  } catch(e) { form.innerHTML = '<div style="color:#dc2626;">Error: ' + e.message + '</div>'; }
+}
+
+function closeConfig() {
+  document.getElementById('config-overlay').classList.remove('visible');
+}
+
+async function saveConfig() {
+  const body = {
+    enabled: true,
+    wiki_url: document.getElementById('cfg-url').value,
+    wiki_token: document.getElementById('cfg-token').value,
+    base_path: document.getElementById('cfg-path').value,
+    locale: document.getElementById('cfg-locale').value || 'en',
+    auto_sync: false,
+    sync_interval_minutes: 60,
+    include_disks: document.getElementById('cfg-disks').checked,
+    include_cluster: document.getElementById('cfg-cluster').checked,
+    include_ceph: document.getElementById('cfg-ceph').checked,
+    wiki_orphan_handling: document.getElementById('cfg-orphan').value,
+  };
+  try {
+    await api('/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    toast('\u2713 Configuration saved', 'success');
+    closeConfig();
+    loadSummary();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function relTime(d) {
+  if (!d) return '\u2014';
+  const diff = (Date.now() - new Date(d).getTime()) / 1000;
+  if (diff < 60) return Math.floor(diff) + 's';
+  if (diff < 3600) return Math.floor(diff/60) + 'm';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h';
+  return Math.floor(diff/86400) + 'd';
+}
+
+loadSummary(); loadEntities();
+</script>
+</body>
+</html>
