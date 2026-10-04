@@ -17,4 +17,5 @@ PVE2Proxy
 PVE2Power
 PVE2Drift
 pve2wiki
+PVE2LLM
 example_plugin

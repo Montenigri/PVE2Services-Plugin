@@ -1,6 +1,6 @@
 id: pve2core
 name: PVE2 Core
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: Central connector for Proxmox data — populates and serves the machine cache.
 author: PVE2 Services Contributors
@@ -10,3 +10,34 @@ capabilities:
   writes: [machine_cache, sync_state]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_machines
+      description: List every VM/LXC/node known to the machine cache, optionally filtered by type or node.
+      handler: "mcp_tools:list_machines"
+      capability: machine_cache
+      input_schema:
+        type: object
+        properties:
+          type: {type: string, description: "qemu, lxc or node"}
+          node: {type: string}
+        additionalProperties: false
+    - name: get_machine
+      description: Return a single machine by id from the machine cache.
+      handler: "mcp_tools:get_machine"
+      capability: machine_cache
+      input_schema:
+        type: object
+        properties:
+          machine_id: {type: string}
+        required: [machine_id]
+        additionalProperties: false
+    - name: cluster_health
+      description: Return machine-cache size, Proxmox connection status and last sync time.
+      handler: "mcp_tools:cluster_health"
+      capability: cluster_state
+      input_schema:
+        type: object
+        properties: {}
+        additionalProperties: false

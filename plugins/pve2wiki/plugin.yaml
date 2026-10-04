@@ -1,6 +1,6 @@
 id: pve2wiki
 name: PVE2 Wiki
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: Syncs Proxmox infrastructure to Wiki.js via GraphQL.
 author: PVE2 Services Contributors
@@ -10,3 +10,28 @@ capabilities:
   writes: [wiki_pages, sync_state]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_pages
+      description: List synced Wiki.js pages.
+      handler: "mcp_tools:list_pages"
+      capability: wiki_pages
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: get_page
+      description: Return one synced wiki page by entity id.
+      handler: "mcp_tools:get_page"
+      capability: wiki_pages
+      input_schema:
+        type: object
+        properties: {entity_id: {type: string}}
+        required: [entity_id]
+        additionalProperties: false
+    - name: list_sync_state
+      description: List entities tracked by the sync engine.
+      handler: "mcp_tools:list_sync_state"
+      capability: sync_state
+      input_schema:
+        type: object
+        properties: {limit: {type: integer}}
+        additionalProperties: false

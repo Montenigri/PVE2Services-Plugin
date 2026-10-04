@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Montenigri/PVE2Services-Plugin/security/advisories/new
+    about: Report security issues privately — never as a public issue.
+  - name: Core issues (pve2service-core)
+    url: https://github.com/Montenigri/pve2service-core/issues
+    about: Bugs and feature requests for the core service itself.
+  - name: Plugin development guide
+    url: https://github.com/Montenigri/PVE2Services-Plugin/blob/main/PLUGIN_DEVELOPMENT.md
+    about: Manifest contract, shared libraries and plugin conventions.

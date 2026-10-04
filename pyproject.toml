@@ -12,11 +12,28 @@ requires-python = ">=3.11"
 authors = [
     { name = "PVE2 Services Contributors" },
 ]
-# The core library is the runtime contract used by every plugin. Pin a
-# compatible range; CI installs the matching `pve2` wheel.
+keywords = ["proxmox", "homelab", "plugins", "dns", "notifications", "wiki", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+]
+# The core library is the runtime contract used by every plugin. CI pins the
+# matching core tag via PVE2_CORE_SPEC (see .github/workflows/ci.yml).
 dependencies = [
     "pve2>=0.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Montenigri/pve2service-core"
+Repository = "https://github.com/Montenigri/PVE2Services-Plugin"
+Issues = "https://github.com/Montenigri/PVE2Services-Plugin/issues"
+Changelog = "https://github.com/Montenigri/PVE2Services-Plugin/blob/main/CHANGELOG.md"
+
 
 [project.optional-dependencies]
 test = ["pytest", "httpx"]

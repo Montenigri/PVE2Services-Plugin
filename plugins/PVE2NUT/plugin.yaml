@@ -1,6 +1,6 @@
 id: pve2nut
 name: PVE2 NUT
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: NUT (Network UPS Tools) dashboard — multi-server UPS monitoring with history charts, events and instant commands.
 author: PVE2 Services Contributors
@@ -10,3 +10,42 @@ capabilities:
   writes: [sync_state, nut_history, nut_events, notifications]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_devices
+      description: List every monitored UPS name.
+      handler: "mcp_tools:list_devices"
+      capability: nut_history
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: last_reading
+      description: Return the most recent reading for one UPS.
+      handler: "mcp_tools:last_reading"
+      capability: nut_history
+      input_schema:
+        type: object
+        properties: {ups_name: {type: string}}
+        required: [ups_name]
+        additionalProperties: false
+    - name: get_history
+      description: Return UPS history samples for the last N hours.
+      handler: "mcp_tools:get_history"
+      capability: nut_history
+      input_schema:
+        type: object
+        properties:
+          ups_name: {type: string}
+          hours: {type: integer}
+          limit: {type: integer}
+        required: [ups_name]
+        additionalProperties: false
+    - name: list_events
+      description: List recent UPS events, optionally for one UPS.
+      handler: "mcp_tools:list_events"
+      capability: nut_events
+      input_schema:
+        type: object
+        properties:
+          ups_name: {type: string}
+          limit: {type: integer}
+        additionalProperties: false

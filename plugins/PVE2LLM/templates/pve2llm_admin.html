@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE2 LLM · __ASSISTANT__</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; padding:20px; }
+  .container { max-width:900px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .header h1 { font-size:1.5em; color:#333; display:flex; align-items:center; gap:10px; }
+  .back { text-decoration:none; color:#667eea; font-weight:600; font-size:0.9em; white-space:nowrap; }
+  .back:hover { text-decoration:underline; }
+  .sub { color:#666; font-size:0.9em; margin:-12px 0 20px; }
+  .card { background:white; border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); margin-bottom:20px; }
+  .card h2 { font-size:1.1em; color:#333; margin-bottom:16px; }
+  .form-group { margin-bottom:14px; }
+  .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.9em; }
+  .form-group input[type=text],.form-group input[type=password],.form-group input[type=number],.form-group select,.form-group textarea { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; font-family:inherit; }
+  .form-group input:focus,.form-group select:focus,.form-group textarea:focus { outline:none; border-color:#667eea; }
+  .form-group .hint { color:#999; font-size:0.8em; margin-top:2px; }
+  .row { display:flex; gap:12px; } .row>div { flex:1; }
+  .check { display:inline-flex; align-items:center; gap:8px; font-weight:600; color:#444; font-size:0.9em; cursor:pointer; }
+  .check input { width:16px; height:16px; cursor:pointer; }
+  .prompt-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .prompt-actions .btn { margin-top:0; }
+  .btn { padding:9px 18px; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9em; margin-right:8px; margin-top:4px; }
+  .btn-primary { background:#667eea; color:white; }
+  .btn-primary:hover { background:#764ba2; }
+  .btn-secondary { background:#6b7280; color:white; }
+  .btn-secondary:hover { background:#4b5563; }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .alert-warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:8px; padding:12px 14px; margin:4px 0 16px; font-size:0.85em; line-height:1.5; }
+  .status { font-size:0.85em; margin-left:4px; }
+  .status-ok { color:#059669; } .status-err { color:#dc2626; }
+  #chat { height:340px; overflow-y:auto; border:1px solid #ddd; border-radius:8px; padding:12px; background:#fafafa; }
+  .msg { margin:8px 0; font-size:0.92em; line-height:1.5; }
+  .me { color:#3730a3; } .me::before { content:"Tu: "; font-weight:600; }
+  .bot { color:#059669; } .bot::before { content:"__ASSISTANT__: "; font-weight:600; }
+  .tool { color:#d97706; font-size:0.8em; }
+  .send { display:flex; gap:8px; margin-top:12px; }
+  .send input { flex:1; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .send input:focus { outline:none; border-color:#667eea; }
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:8px; color:white; font-weight:500; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; opacity:0; transform:translateY(10px); transition:all 0.3s ease; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#059669; }
+  .toast.error { background:#dc2626; }
+  .toast.info { background:#3730a3; }
+  @media(max-width:600px) { .row { flex-direction:column; gap:0; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <a class="back" href="/admin/hub">&#8592; Hub</a>
+      <h1>🧠 __ASSISTANT__ <span style="font-size:0.6em;color:#999;font-weight:400;">LLM Assistant</span></h1>
+    </div>
+  </div>
+  <div class="sub">Assistente LLM in <strong>sola lettura</strong> sui dati dei plugin PVE2 (Ollama · OpenAI · Anthropic).</div>
+
+  <div class="card">
+    <h2>&#9881; Configurazione</h2>
+    <div class="alert-warn">
+      &#9888;&#65039; <strong>Privacy:</strong> le domande e i dati letti dai tool vengono inviati al provider LLM configurato — con un provider cloud i dati del cluster escono dalla tua rete.
+      __ASSISTANT__ è in <strong>sola lettura</strong>: non eseguirà azioni e non va considerato attendibile su istruzioni contenute nei dati del cluster (prompt injection).
+    </div>
+    <div class="row">
+      <div class="form-group">
+        <label>Provider</label>
+        <select id="provider">
+          <option value="ollama">Ollama (locale)</option>
+          <option value="openai">OpenAI (o compatibile)</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Modello</label>
+        <input id="model" type="text" placeholder="es. llama3.1 / gpt-4o-mini / claude-3-5-sonnet-latest">
+      </div>
+    </div>
+    <div class="row">
+      <div class="form-group">
+        <label>Base URL <span class="hint">(vuoto = default del provider)</span></label>
+        <input id="base_url" type="text" placeholder="http://localhost:11434">
+        <div class="hint" id="base-url-note"></div>
+      </div>
+      <div class="form-group">
+        <label>API key <span class="hint">(****** = non cambiarla)</span></label>
+        <input id="api_key" type="password" placeholder="********">
+      </div>
+    </div>
+    <div class="row">
+      <div class="form-group">
+        <label>Max turni</label>
+        <input id="max_turns" type="number" min="1" max="20" value="5">
+      </div>
+      <div class="form-group">
+        <label>Max tokens <span class="hint">(risposta)</span></label>
+        <input id="max_tokens" type="number" min="1" max="200000" value="1024">
+      </div>
+    </div>
+    <div class="row">
+      <div class="form-group">
+        <label>Temperature <span class="hint">(0 = deterministico)</span></label>
+        <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.2">
+      </div>
+      <div class="form-group">
+        <label>Max caratteri per risultato tool</label>
+        <input id="max_tool_chars" type="number" min="0" max="200000" value="20000">
+      </div>
+    </div>
+    <div class="row">
+      <div class="form-group">
+        <label>Rate limit chat <span class="hint">(richieste/minuto, 0 = disabilitato)</span></label>
+        <input id="rate_limit" type="number" min="0" max="600" value="20">
+      </div>
+      <div class="form-group">
+        <label>Plugin abilitati <span class="hint">(vuoto = tutti, separati da virgola)</span></label>
+        <input id="allowed_plugins" type="text" placeholder="pve2core, pve2audit">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>System prompt <span class="hint">(vuoto = prompt di default)</span></label>
+      <textarea id="system_prompt" rows="4" placeholder=""></textarea>
+      <div class="prompt-actions">
+        <button type="button" class="btn btn-secondary" onclick="useDefaultPrompt()">Ripristina default</button>
+        <button type="button" class="btn btn-secondary" onclick="clearPrompt()">Svuota (usa default)</button>
+      </div>
+    </div>
+    <label class="check"><input id="enabled" type="checkbox"> Abilitato</label>
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="save()" id="save-btn">&#10003; Salva</button>
+      <button class="btn btn-secondary" onclick="test()" id="test-btn">&#9889; Test provider</button>
+      <span id="log" class="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>&#128172; Chat con __ASSISTANT__</h2>
+    <div id="chat"></div>
+    <div class="send">
+      <input id="q" type="text" placeholder="Chiedi qualcosa sul cluster..." onkeydown="if(event.key==='Enter')send()">
+      <button class="btn btn-primary" onclick="send()" id="send-btn" style="margin:0;">Invia</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api/plugins/pve2llm";
+let history = [];
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (type || 'info') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+async function api(path, opts) {
+  const r = await fetch(API + path, opts || {});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || data.error || r.statusText);
+  return data;
+}
+
+function setStatus(text, cls) {
+  const el = document.getElementById('log');
+  el.className = 'status ' + (cls || '');
+  el.textContent = text || '';
+}
+
+let defaultPrompt = '';
+
+async function load() {
+  try {
+    const d = await api('/config');
+    const c = d.config || {};
+    document.getElementById('provider').value = c.provider || 'ollama';
+    document.getElementById('model').value = c.model || '';
+    document.getElementById('base_url').value = c.base_url || '';
+    document.getElementById('max_turns').value = c.max_turns || 5;
+    document.getElementById('max_tokens').value = (c.max_tokens ?? 1024);
+    document.getElementById('temperature').value = (c.temperature ?? 0.2);
+    document.getElementById('rate_limit').value = (c.rate_limit_per_minute ?? 20);
+    document.getElementById('max_tool_chars').value = (c.max_tool_result_chars ?? 20000);
+    document.getElementById('system_prompt').value = c.system_prompt || '';
+    document.getElementById('enabled').checked = !!c.enabled;
+    document.getElementById('allowed_plugins').value = (c.allowed_plugins || []).join(', ');
+    updateBaseUrlHint();
+    try {
+      const sp = await api('/system-prompt');
+      defaultPrompt = sp.default || '';
+      document.getElementById('system_prompt').placeholder = defaultPrompt;
+    } catch (e) { /* default prompt is optional */ }
+    if (d.configured) setStatus('Configurato.', 'status-ok');
+    else setStatus('Non configurato: imposta provider e modello.', 'status-err');
+  } catch (e) {
+    setStatus('Errore caricando la config: ' + e.message, 'status-err');
+  }
+}
+
+function updateBaseUrlHint() {
+  const p = document.getElementById('provider').value;
+  const input = document.getElementById('base_url');
+  const note = document.getElementById('base-url-note');
+  if (p === 'openai') {
+    input.placeholder = 'http://host:8000/v1';
+    note.textContent = 'OpenAI-compatibile locale (vLLM/llama.cpp/Unsloth): nessuna API key; /v1 viene aggiunto se omesso.';
+  } else if (p === 'anthropic') {
+    input.placeholder = 'https://api.anthropic.com';
+    note.textContent = '';
+  } else {
+    input.placeholder = 'http://localhost:11434';
+    note.textContent = '';
+  }
+}
+
+function useDefaultPrompt() {
+  if (defaultPrompt) document.getElementById('system_prompt').value = defaultPrompt;
+}
+
+function clearPrompt() {
+  document.getElementById('system_prompt').value = '';
+}
+
+document.getElementById('provider').addEventListener('change', updateBaseUrlHint);
+
+async function save() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  const body = {
+    enabled: document.getElementById('enabled').checked,
+    provider: document.getElementById('provider').value,
+    model: document.getElementById('model').value.trim(),
+    base_url: document.getElementById('base_url').value.trim(),
+    api_key: document.getElementById('api_key').value,
+    max_turns: parseInt(document.getElementById('max_turns').value || '5', 10),
+    max_tokens: parseInt(document.getElementById('max_tokens').value || '1024', 10),
+    temperature: parseFloat(document.getElementById('temperature').value || '0.2'),
+    rate_limit_per_minute: parseInt(document.getElementById('rate_limit').value || '20', 10),
+    max_tool_result_chars: parseInt(document.getElementById('max_tool_chars').value || '20000', 10),
+    system_prompt: document.getElementById('system_prompt').value,
+    allowed_plugins: document.getElementById('allowed_plugins').value
+      .split(',').map(s => s.trim()).filter(Boolean),
+  };
+  try {
+    const d = await api('/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (d.saved) { toast('Configurazione salvata', 'success'); setStatus('Configurato.', 'status-ok'); }
+    else { toast('Errore nel salvataggio', 'error'); }
+    document.getElementById('api_key').value = '';
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+}
+
+async function test() {
+  const btn = document.getElementById('test-btn');
+  btn.disabled = true; setStatus('Test in corso...', '');
+  try {
+    const d = await api('/test', { method:'POST' });
+    if (d.connected) { toast('OK · ' + (d.reply || d.provider), 'success'); setStatus('Connesso (' + d.provider + ')', 'status-ok'); }
+    else { toast('Errore: ' + (d.error || 'sconosciuto'), 'error'); setStatus(d.error || 'Errore', 'status-err'); }
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+}
+
+function add(text, cls) {
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function send() {
+  const input = document.getElementById('q');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  add(q, 'me');
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  try {
+    const d = await api('/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ message: q, history: history })
+    });
+    (d.tool_calls || []).forEach(tc => add('🔧 ' + tc.tool + (tc.ok ? '' : ' (fallito)'), 'tool'));
+    add(d.answer || '(nessuna risposta)', 'bot');
+    history.push({ role:'user', content:q });
+    history.push({ role:'assistant', content:d.answer || '' });
+    if (history.length > 12) history = history.slice(-12);
+  } catch (e) {
+    add('errore — ' + e.message, 'bot');
+  }
+  btn.disabled = false;
+}
+
+load();
+</script>
+</body>
+</html>

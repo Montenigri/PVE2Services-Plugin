@@ -31,7 +31,8 @@ jobs:
 
       - name: Install the core library
         env:
-          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2' }}
+          # Pinned core package (see ci.yml); override with a wheel/Packages URL.
+          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2 @ git+https://github.com/Montenigri/pve2service-core.git@v0.1.0' }}
         run: pip install "$PVE2_CORE_SPEC"
 
       - name: Write signing key from secret

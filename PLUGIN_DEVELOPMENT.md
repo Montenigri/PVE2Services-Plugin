@@ -26,7 +26,7 @@ logged reason instead of possibly crashing the core at import time.
 ```yaml
 id: my_plugin                  # lowercase identifier, = directory name
 name: My Custom Plugin
-version: 1.0.0                 # strict X.Y.Z semver
+version: 0.1.0                 # strict X.Y.Z semver
 core_compat: ">=0.1.0,<2.0.0"  # core version range this plugin supports
 entrypoint: "__init__:load_plugin"   # default; "pkg.mod:function" also works
 description: What the plugin does
@@ -52,13 +52,60 @@ Validation rules enforced by the schema (`libs/plugin_manifest.py`):
 - Unknown top-level fields are rejected (typos fail loud, not silent).
 - `trust_tier` must be `trusted` or `third_party`, but is **display-only**:
   the loader derives the effective tier from the verified signature/origin
-  (see [docs/PLUGIN_STORE.md](docs/PLUGIN_STORE.md)).
+  (see [docs/PLUGIN_STORE.md](https://github.com/Montenigri/pve2service-core/blob/main/docs/PLUGIN_STORE.md)).
 
 Capability vocabulary (add yours freely — unknown ones are logged, not
 rejected): reads `cluster_state`, `node_state`, `vm_state`, `storage_state`,
-`machine_cache`, `connector_config`, `audit_log`; writes `machine_cache`,
-`sync_state`, `audit_findings`, `notifications`, `dns_records`,
+`machine_cache`, `connector_config`, `audit_log`, `dns_records`,
+`power_schedules`, `proxy_configs`, `audit_recommendations`, `drift_state`,
+`nut_history`, `nut_events`, `wiki_pages`, `sync_state`, `changelog`; writes
+`machine_cache`, `sync_state`, `audit_findings`, `notifications`, `dns_records`,
 `power_schedules`, `proxy_configs`, `wiki_pages`, `db_settings`.
+
+## MCP Tools (Winky assistant)
+
+Plugins can expose read-only data to the **PVE2LLM** assistant (name: *Winky*)
+by adding an optional `mcp:` block to `plugin.yaml`. The core plugin loader
+resolves every `handler` (`module:function`, relative to the plugin package)
+and registers it in-process — no network MCP transport, no extra auth.
+
+```yaml
+mcp:
+  enabled: true
+  tools:
+    - name: list_records                 # lowercase identifier, unique per plugin
+      description: List every managed DNS record.
+      handler: "mcp_tools:list_records"  # module:function inside the plugin
+      capability: dns_records            # a read capability (see vocabulary)
+      read_only: true                    # Winky only ever exposes read-only tools
+      input_schema:                      # JSON Schema for the tool arguments
+        type: object
+        properties: {}
+        additionalProperties: false
+```
+
+Handlers are async and take the argument object produced by the LLM:
+
+```python
+# plugins/my_plugin/mcp_tools.py
+async def list_records(params: dict) -> dict:
+    from PVE2Services.libs.db_adapter import get_db
+    rows = get_db().get_dns_records()
+    return {"count": len(rows), "records": rows}
+```
+
+Rules:
+
+- `mcp` is optional — plugins without it are unaffected.
+- `handler` is resolved relative to the plugin package; a broken handler is
+  logged, never fatal (the plugin still loads).
+- Only `read_only: true` tools reach the assistant. Declare mutating tools with
+  `read_only: false` and they will never be offered to the model.
+- Tools must return JSON-serializable data; the agent serializes with
+  `default=str` as a fallback.
+- Read the core copy of this guide / `libs/plugin_manifest.py` for the exact
+  `MCPTool`/`MCPServer` schema.
+
 
 ## Minimal Plugin
 
@@ -79,7 +126,7 @@ def load_plugin(app: FastAPI):
         return {
             "plugin": "my_plugin",
             "name": "My Custom Plugin",
-            "version": "1.0.0",
+            "version": "0.1.0",
             "description": "A custom plugin example",
             "status": "active",
         }
@@ -100,7 +147,7 @@ an `__init__.py` and a valid `plugin.yaml` is validated (schema and
 `core_compat`), classified by trust tier from verified provenance, then
 imported and `load_plugin(app)` is called. Loading failures are logged, never
 fatal. See `libs/plugin_loader.py` and
-[docs/PLUGIN_STORE.md](docs/PLUGIN_STORE.md) for the trust model and the
+[docs/PLUGIN_STORE.md](https://github.com/Montenigri/pve2service-core/blob/main/docs/PLUGIN_STORE.md) for the trust model and the
 store distribution channel.
 
 ### Naming Convention

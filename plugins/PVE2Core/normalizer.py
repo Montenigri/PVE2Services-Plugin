@@ -7,7 +7,9 @@ def normalize_machine(raw: Dict[str, Any], node: str, machine_type: str, ips: Li
     id_str = str(raw.get("vmid", ""))
     tags_raw = raw.get("tags", "")
     if isinstance(tags_raw, str):
-        tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
+        # Proxmox returns the tags property as a single string separated by
+        # semicolons (e.g. "a;b"); older/CLI paths may use commas. Split on both.
+        tags = [t.strip() for t in tags_raw.replace(";", ",").split(",") if t.strip()] if tags_raw else []
     else:
         tags = list(tags_raw) if tags_raw else []
 

@@ -1,6 +1,6 @@
 id: pve2dash
 name: PVE2 Dash
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: Lightweight read-only dashboard for Proxmox cluster health.
 author: PVE2 Services Contributors
@@ -10,3 +10,11 @@ capabilities:
   writes: []
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: dashboard_summary
+      description: Aggregate cluster health — machine counts by type and status.
+      handler: "mcp_tools:dashboard_summary"
+      capability: machine_cache
+      input_schema: {type: object, properties: {}, additionalProperties: false}

@@ -1,6 +1,6 @@
 id: pve2audit
 name: PVE2 Audit
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: Resource analysis and rightsizing recommendations for the cluster.
 author: PVE2 Services Contributors
@@ -10,3 +10,44 @@ capabilities:
   writes: [audit_findings]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_recommendations
+      description: List active rightsizing recommendations, optionally filtered by entity, category or severity.
+      handler: "mcp_tools:list_recommendations"
+      capability: audit_recommendations
+      input_schema:
+        type: object
+        properties:
+          entity_id: {type: string}
+          category: {type: string}
+          severity: {type: string}
+          active_only: {type: boolean}
+        additionalProperties: false
+    - name: summary
+      description: Counts of open recommendations by severity and category.
+      handler: "mcp_tools:summary"
+      capability: audit_recommendations
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: entity_history
+      description: Recent resource-history samples for one entity.
+      handler: "mcp_tools:entity_history"
+      capability: audit_recommendations
+      input_schema:
+        type: object
+        properties:
+          entity_id: {type: string}
+          limit: {type: integer}
+        required: [entity_id]
+        additionalProperties: false
+    - name: resource_aggregate
+      description: Aggregated CPU/memory/disk statistics for one entity.
+      handler: "mcp_tools:resource_aggregate"
+      capability: audit_recommendations
+      input_schema:
+        type: object
+        properties:
+          entity_id: {type: string}
+        required: [entity_id]
+        additionalProperties: false

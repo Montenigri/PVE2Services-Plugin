@@ -1,6 +1,6 @@
 id: pve2dns
 name: PVE2 DNS
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: DNS synchronization connector with Pi-hole and AdGuard support.
 author: PVE2 Services Contributors
@@ -10,3 +10,20 @@ capabilities:
   writes: [dns_records]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_records
+      description: List every managed DNS record.
+      handler: "mcp_tools:list_records"
+      capability: dns_records
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: get_record
+      description: Return one DNS record by machine id.
+      handler: "mcp_tools:get_record"
+      capability: dns_records
+      input_schema:
+        type: object
+        properties: {machine_id: {type: string}}
+        required: [machine_id]
+        additionalProperties: false

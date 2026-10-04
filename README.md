@@ -1,6 +1,6 @@
 # PVE2Services — Plugins
 
-First-party plugins for [PVE2Services](https://github.com/Montenigri/PVE2Services).
+First-party plugins for [PVE2Services](https://github.com/Montenigri/pve2service-core).
 This repo is the source of truth for every plugin that ships with (or extends)
 the PVE2 core.
 
@@ -19,6 +19,11 @@ are the *first-party open* set and are bundled by the core. Everything listed in
 [`plugins/store_plugins.txt`](plugins/store_plugins.txt) is additionally built,
 signed and published to the plugin store by the release workflow. Add new,
 independently-released first-party plugins there.
+
+> **v1 status — bundled-only.** The plugin **store is not active yet**: the v1
+> open-source release ships the *first-party open* (bundled) plugins only. The
+> store channel and its signing/publish workflow are in place but remain
+> dormant until the first store plugin is published.
 
 ## Layout
 
@@ -41,8 +46,10 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip install pytest
 
-# Either install the core wheel:
-pip install pve2
+# Either install the pinned core (the tag matching this plugin release):
+pip install "pve2 @ git+https://github.com/Montenigri/pve2service-core.git@v0.1.0"
+# ...or install the wheel attached to the core GitHub release:
+pip install /path/to/pve2-0.1.0-py3-none-any.whl
 # ...or point at a local core checkout (parent of the PVE2Services/ package dir):
 export PYTHONPATH=/path/to/PVE2Services-Core
 
@@ -66,6 +73,13 @@ PVE2_STORE_ENDPOINT=http://localhost:19000 \
     python tools/build_plugin.py plugins/PVE2Backup --publish
 ```
 
-See [`docs/PLUGIN_STORE.md`](https://github.com/Montenigri/PVE2Services/blob/main/docs/PLUGIN_STORE.md)
+See [`docs/PLUGIN_STORE.md`](https://github.com/Montenigri/pve2service-core/blob/main/docs/PLUGIN_STORE.md)
 in the core repo for the full store reference, and
 [`PLUGIN_DEVELOPMENT.md`](PLUGIN_DEVELOPMENT.md) for the manifest/plugin contract.
+
+## Disclaimer
+
+PVE2Services and these plugins are an independent project and are **not
+affiliated with, endorsed by, or sponsored by Proxmox Server Solutions GmbH**.
+"Proxmox" is a trademark of its respective owner and is used here only to
+describe interoperability.

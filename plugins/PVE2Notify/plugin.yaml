@@ -1,6 +1,6 @@
 id: pve2notify
 name: PVE2 Notify
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: Monitors Proxmox state changes and dispatches notifications.
 author: PVE2 Services Contributors

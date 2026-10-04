@@ -1,0 +1,14 @@
+id: pve2llm
+name: PVE2 LLM
+version: 0.1.0
+core_compat: ">=0.1.0,<2.0.0"
+description: Winky — an LLM assistant (Ollama/OpenAI/Anthropic) that performs read-only queries on PVE2 plugin data via their MCP tools.
+author: PVE2 Services Contributors
+icon: "🧠"
+capabilities:
+  reads: [machine_cache, cluster_state, connector_config, audit_recommendations,
+          dns_records, power_schedules, proxy_configs, nut_history, nut_events,
+          drift_state, wiki_pages, sync_state, changelog]
+  writes: []
+trust_tier: trusted
+license_required: false

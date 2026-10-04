@@ -77,12 +77,19 @@ def load_plugin(app: FastAPI):
             return {"connected": False, "error": "No DNS providers enabled"}
         results = {}
         all_ok = True
-        for p in providers:
-            name = type(p).__name__.replace("Provider", "").lower()
-            r = await p.test_connection()
-            results[name] = r
-            if not r.get("connected"):
-                all_ok = False
+        try:
+            for p in providers:
+                name = type(p).__name__.replace("Provider", "").lower()
+                r = await p.test_connection()
+                results[name] = r
+                if not r.get("connected"):
+                    all_ok = False
+        finally:
+            for p in providers:
+                try:
+                    await p.close()
+                except Exception:  # noqa: BLE001 — teardown is best-effort
+                    pass
         return {"connected": all_ok, "results": results}
 
     @app.post("/api/plugins/pve2dns/sync", response_model=SyncResult)
@@ -115,7 +122,7 @@ def load_plugin(app: FastAPI):
             return f"{hostname}.{domain}"
 
         all_errors: list[str] = []
-        synced_ids: list[str] = []
+        synced_ids: set[str] = set()
         deleted_ids: list[str] = []
         pihole_result = None
         adguard_result = None
@@ -141,12 +148,19 @@ def load_plugin(app: FastAPI):
                 if result.get("errors"):
                     all_errors.extend(result["errors"])
                 else:
-                    synced_ids.extend(r["machine_id"] for r in enabled)
+                    # A record is synced once even when multiple resolvers are
+                    # configured; the set avoids counting it per provider.
+                    synced_ids.update(r["machine_id"] for r in enabled)
             except Exception as e:
                 all_errors.append(f"{name}: {e}")
+            finally:
+                try:
+                    await p.close()
+                except Exception:  # noqa: BLE001 — teardown is best-effort
+                    pass
 
         if synced_ids:
-            db.mark_dns_record_synced(synced_ids)
+            db.mark_dns_record_synced(list(synced_ids))
         # Stale records were deleted — forget their sync state so we don't
         # retry deletion forever.
         if deleted_ids:

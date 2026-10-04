@@ -5,6 +5,24 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
+_URL_SCHEMES = ("http://", "https://", "ssh://", "sftp://", "tcp://")
+
+
+def strip_url_noise(value: str) -> str:
+    """Normalise user-entered host/domain/path values.
+
+    Drops a leading URL scheme (``http://``, ``ssh://``…) and any trailing
+    slashes so values like ``http://192.168.1.5/`` or ``/etc/nginx/conf.d/`` do
+    not carry that noise into the stored config or the generated proxy config.
+    """
+    value = (value or "").strip()
+    lowered = value.lower()
+    for scheme in _URL_SCHEMES:
+        if lowered.startswith(scheme):
+            value = value[len(scheme):]
+            break
+    return value.rstrip("/")
+
 
 class ProxyConfig(BaseModel):
     enabled: bool = False
@@ -16,10 +34,15 @@ class ProxyConfig(BaseModel):
     ssh_user: str = ""
     ssh_key: str = ""
     nginx_output_path: str = "/etc/nginx/conf.d/pve2proxy.conf"
-    traefik_output_dir: str = "/etc/traefik/dynamic/"
+    traefik_output_dir: str = "/etc/traefik/dynamic"
     nginx_reload_cmd: str = "nginx -s reload"
     auto_sync: bool = False
     sync_interval_minutes: int = 60
+
+    @field_validator("base_domain", "ssh_host", "nginx_output_path", "traefik_output_dir")
+    @classmethod
+    def _clean_url_fields(cls, v: str) -> str:
+        return strip_url_noise(v)
 
     @field_validator("nginx_reload_cmd")
     @classmethod

@@ -361,7 +361,7 @@ async function openConfig() {
       '<h3>Paths</h3>' +
       '<div class="form-group" id="nginx-only" style="' + (c.proxy_type==='traefik'?'display:none':'') + '"><label>Nginx output path</label><input type="text" id="cfg-nginx-path" value="' + escapeHtml(c.nginx_output_path||'/etc/nginx/conf.d/pve2proxy.conf') + '"></div>' +
       '<div class="form-group" id="nginx-reload" style="' + (c.proxy_type==='traefik'?'display:none':'') + '"><label>Nginx reload command</label><input type="text" id="cfg-reload" value="' + escapeHtml(c.nginx_reload_cmd||'nginx -s reload') + '"></div>' +
-      '<div class="form-group" id="traefik-only" style="' + (c.proxy_type!=='traefik'?'display:none':'') + '"><label>Traefik dynamic config directory</label><input type="text" id="cfg-traefik-dir" value="' + escapeHtml(c.traefik_output_dir||'/etc/traefik/dynamic/') + '"></div>' +
+      '<div class="form-group" id="traefik-only" style="' + (c.proxy_type!=='traefik'?'display:none':'') + '"><label>Traefik dynamic config directory</label><input type="text" id="cfg-traefik-dir" value="' + escapeHtml(c.traefik_output_dir||'/etc/traefik/dynamic') + '"></div>' +
       '<div class="btn-row">' +
         '<button class="btn-cancel" onclick="closeConfig()">Cancel</button>' +
         '<button class="btn-save-config" onclick="saveConfig()">\u2713 Save Config</button>' +
@@ -390,7 +390,7 @@ async function saveConfig() {
     ssh_key: document.getElementById('cfg-ssh-key').value,
     nginx_output_path: document.getElementById('cfg-nginx-path') ? document.getElementById('cfg-nginx-path').value : '/etc/nginx/conf.d/pve2proxy.conf',
     nginx_reload_cmd: document.getElementById('cfg-reload').value || 'nginx -s reload',
-    traefik_output_dir: document.getElementById('cfg-traefik-dir') ? document.getElementById('cfg-traefik-dir').value : '/etc/traefik/dynamic/',
+    traefik_output_dir: document.getElementById('cfg-traefik-dir') ? document.getElementById('cfg-traefik-dir').value : '/etc/traefik/dynamic',
     auto_sync: false,
     sync_interval_minutes: 60,
   };

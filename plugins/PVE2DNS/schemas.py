@@ -10,7 +10,7 @@ class DNSConfig(BaseModel):
     pihole_enabled: bool = False
     pihole_url: str = ""
     pihole_token: str = ""
-    pihole_api_version: str = "v5"
+    pihole_api_version: str = "v6"
     adguard_enabled: bool = False
     adguard_url: str = ""
     adguard_username: str = ""

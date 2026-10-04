@@ -110,7 +110,7 @@ def load_plugin(app: FastAPI):
         return {
             "plugin": PLUGIN_ID,
             "name": "PVE2 NUT",
-            "version": "1.0.0",
+            "version": "0.1.0",
             "description": "NUT (Network UPS Tools) dashboard — multi-server UPS monitoring",
             "status": "active",
         }

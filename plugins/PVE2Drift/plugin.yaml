@@ -10,3 +10,26 @@ capabilities:
   writes: [drift_state, audit_findings]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_managed_resources
+      description: List IaC-declared resources tracked for drift.
+      handler: "mcp_tools:list_managed_resources"
+      capability: drift_state
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: list_open_drifts
+      description: List currently open drift events.
+      handler: "mcp_tools:list_open_drifts"
+      capability: drift_state
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: list_drift_events
+      description: List drift events, optionally filtered by status.
+      handler: "mcp_tools:list_drift_events"
+      capability: drift_state
+      input_schema:
+        type: object
+        properties:
+          status: {type: string}
+          limit: {type: integer}
+        additionalProperties: false

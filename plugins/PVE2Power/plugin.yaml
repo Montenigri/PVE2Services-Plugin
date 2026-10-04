@@ -1,6 +1,6 @@
 id: pve2power
 name: PVE2 Power
-version: 1.0.0
+version: 0.1.0
 core_compat: ">=0.1.0,<2.0.0"
 description: Schedules automatic startup and shutdown of VMs and LXC containers.
 author: PVE2 Services Contributors
@@ -10,3 +10,20 @@ capabilities:
   writes: [power_schedules]
 trust_tier: trusted
 license_required: false
+mcp:
+  enabled: true
+  tools:
+    - name: list_schedules
+      description: List every automatic power schedule.
+      handler: "mcp_tools:list_schedules"
+      capability: power_schedules
+      input_schema: {type: object, properties: {}, additionalProperties: false}
+    - name: get_schedule
+      description: Return the power schedule for one machine.
+      handler: "mcp_tools:get_schedule"
+      capability: power_schedules
+      input_schema:
+        type: object
+        properties: {machine_id: {type: string}}
+        required: [machine_id]
+        additionalProperties: false

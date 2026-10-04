@@ -20,9 +20,10 @@ jobs:
 
       - name: Install the core library
         env:
-          # Published wheel. Override with a repo variable, e.g. a GitHub
-          # Packages URL with credentials, or a pinned version.
-          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2' }}
+          # Pinned core package. Default points at the core release tag that
+          # matches this plugin release; override with PVE2_CORE_SPEC (repo
+          # variable) to use a wheel URL, GitHub Packages or a commit SHA.
+          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2 @ git+https://github.com/Montenigri/pve2service-core.git@v0.1.0' }}
         run: pip install "$PVE2_CORE_SPEC"
 
       - name: Run ruff
@@ -50,7 +51,7 @@ jobs:
 
       - name: Install the core library
         env:
-          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2' }}
+          PVE2_CORE_SPEC: ${{ vars.PVE2_CORE_SPEC || 'pve2 @ git+https://github.com/Montenigri/pve2service-core.git@v0.1.0' }}
         run: pip install "$PVE2_CORE_SPEC"
 
       - name: Verify every manifest
@@ -76,3 +77,64 @@ jobs:
                   print(f"FAIL {d.name}: {exc}")
           sys.exit(1 if failed else 0)
           PY
+
+      - name: Load plugins end-to-end (routes + MCP tools)
+        env:
+          PVE2_SESSION_SECURE: "false"
+          PVE2_DB_URL: "sqlite:////tmp/pve2_ci_smoke.db"
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import types
+          from pathlib import Path
+
+          from fastapi import FastAPI
+
+          plugins_dir = Path("plugins").resolve()
+          os.environ["PVE2_PLUGINS_DIR"] = str(plugins_dir)
+
+          import PVE2Services
+          try:
+              import PVE2Services.plugins as plugins_pkg
+          except ModuleNotFoundError:
+              plugins_pkg = types.ModuleType("PVE2Services.plugins")
+              plugins_pkg.__path__ = []
+              sys.modules["PVE2Services.plugins"] = plugins_pkg
+              PVE2Services.plugins = plugins_pkg
+          if str(plugins_dir) not in plugins_pkg.__path__:
+              plugins_pkg.__path__.append(str(plugins_dir))
+
+          from PVE2Services.libs import plugin_loader
+          plugin_loader.REPO_PLUGINS_DIR = plugins_dir
+
+          from PVE2Services.libs.mcp_registry import get_mcp_registry
+          from PVE2Services.libs.plugin_loader import load_all_plugins
+
+          app = FastAPI()
+          ids, registry = load_all_plugins(app, plugins_dir)
+          errors = {i.id: i.load_error for i in registry.all() if not i.loaded}
+          if errors:
+              print("FAIL load errors:", errors)
+              sys.exit(1)
+
+          tools = get_mcp_registry().all(read_only_only=True)
+          routes = {getattr(r, "path", "") for r in app.routes}
+          required = {
+              "/admin/pve2llm",
+              "/api/plugins/pve2llm/chat",
+              "/api/plugins/pve2llm/tools",
+          }
+          missing = required - routes
+          if missing:
+              print("FAIL missing routes:", missing)
+              sys.exit(1)
+          if "pve2llm" not in ids:
+              print("FAIL pve2llm not loaded")
+              sys.exit(1)
+          if len(tools) < 20:
+              print(f"FAIL expected >=20 read-only MCP tools, got {len(tools)}")
+              sys.exit(1)
+          print(f"ok {len(ids)} plugins loaded, {len(tools)} read-only MCP tools")
+          PY
+

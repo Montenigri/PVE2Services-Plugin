@@ -64,7 +64,7 @@
   .modal h2 { font-size:1.2em; margin-bottom:20px; color:#333; }
   .modal .form-group { margin-bottom:16px; }
   .modal .form-group label { display:block; font-weight:600; color:#444; margin-bottom:4px; font-size:0.9em; }
-  .modal .form-group input[type=text],.modal .form-group input[type=password],.modal .form-group input[type=number] { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
+  .modal .form-group input[type=text],.modal .form-group input[type=password],.modal .form-group input[type=number],.modal .form-group select { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; }
   .modal .form-group input:focus { outline:none; border-color:#667eea; }
   .modal .form-group .hint { color:#999; font-size:0.8em; margin-top:2px; }
   .modal .btn-row { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
@@ -295,7 +295,11 @@ async function openConfig() {
       '<h3 style="margin-bottom:12px;color:#555;">Pi-hole</h3>' +
       '<div class="form-group"><label><input type="checkbox" id="cfg-pihole-enabled"' + (c.pihole_enabled ? ' checked' : '') + '> Enable Pi-hole</label></div>' +
       '<div class="form-group"><label>URL</label><input type="text" id="cfg-pihole-url" value="' + escapeHtml(c.pihole_url||'') + '" placeholder="http://192.168.1.5"></div>' +
-      '<div class="form-group"><label>API Token</label><input type="password" id="cfg-pihole-token" value="' + escapeHtml(c.pihole_token||'') + '" placeholder="From Pi-hole settings → API"></div>' +
+      '<div class="form-group"><label>API version</label><select id="cfg-pihole-version">' +
+        '<option value="v6"' + ((c.pihole_api_version||'v6') === 'v6' ? ' selected' : '') + '>v6 (current)</option>' +
+        '<option value="v5"' + (c.pihole_api_version === 'v5' ? ' selected' : '') + '>v5 (legacy)</option>' +
+      '</select><div class="hint">v6: use the Pi-hole web password. v5: use the API token hash.</div></div>' +
+      '<div class="form-group"><label>Password / API token</label><input type="password" id="cfg-pihole-token" value="' + escapeHtml(c.pihole_token||'') + '" placeholder="Pi-hole web password (v6) or API token (v5)"></div>' +
       '<hr style="margin:16px 0;border:none;border-top:1px solid #eee;">' +
       '<h3 style="margin-bottom:12px;color:#555;">AdGuard Home</h3>' +
       '<div class="form-group"><label><input type="checkbox" id="cfg-adguard-enabled"' + (c.adguard_enabled ? ' checked' : '') + '> Enable AdGuard</label></div>' +
@@ -320,6 +324,7 @@ async function saveConfig() {
     pihole_enabled: document.getElementById('cfg-pihole-enabled').checked,
     pihole_url: document.getElementById('cfg-pihole-url').value,
     pihole_token: document.getElementById('cfg-pihole-token').value,
+    pihole_api_version: document.getElementById('cfg-pihole-version').value,
     adguard_enabled: document.getElementById('cfg-adguard-enabled').checked,
     adguard_url: document.getElementById('cfg-adguard-url').value,
     adguard_username: document.getElementById('cfg-adguard-user').value,
